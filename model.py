@@ -16,7 +16,7 @@ class Net(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
+        x = x.view(-1, 16 * 4 * 4)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -31,8 +31,8 @@ def train(net, trainloader, optimizer, epochs, device):
     net.to(device)
     for epoch in range(epochs):
         
-        for batch in trainloader:
-            images, labels = batch["img"].to(device), batch["label"].to(device)
+        for images, labels in trainloader:
+            images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = net(images)
             loss = criterion(outputs, labels)
@@ -55,8 +55,8 @@ def test(net, testloader, device):
     net.eval()
     net.to(device)
     with torch.no_grad():
-        for batch in testloader:
-            images, labels = batch["img"].to(device), batch["label"].to(device)
+        for images, labels in testloader:
+            images, labels = images.to(device), labels.to(device)
             outputs = net(images)
             loss += criterion(outputs, labels).item()
             _, predicted = torch.max(outputs.data, 1)

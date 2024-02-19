@@ -1,9 +1,11 @@
 ---
 
-num_round: 10
-num_clients: 100
+num_rounds: 10
+num_clients: 5
 batch_size: 20
 num_classes: 10
+num_clients_per_round_fit: 1
+num_clients_per_round_eval: 2
 config_fit:
   lr: 0.001
   momentum: 0.9
