@@ -48,6 +48,8 @@ def train(net, trainloader, optimizer, epochs, device):
         #     print(f"Epoch {epoch+1}: train loss {epoch_loss}, accuracy {epoch_acc}")
 
 
+
+
 def test(net, testloader, device):
     """Evaluate the network on the entire test set."""
     criterion = torch.nn.CrossEntropyLoss()

@@ -1,0 +1,14 @@
+---
+
+foo: 123
+
+bar:
+  baz: [1, 2, 3, 4.99]
+  more:
+    bla: "hello"
+    blabla: ${foo}
+  
+my_func:
+  _target_: toy.function_test
+  x: 123
+  y: 321
