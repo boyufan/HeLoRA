@@ -15,30 +15,12 @@ from server import get_evaluate_fn, get_on_fit_config
 def main(cfg: DictConfig):
 
     ## step 1: load dataset
-    # trainloaders, validationloaders, testloader = prepare_dataset(cfg.num_clients, cfg.batch_size)
-    trainloaders, validationloaders = load_data(cfg.num_clients)
+    trainloaders, valloaders, _ = load_data(cfg.num_clients)
 
     ## step 2 define client
-    client_fn = generate_client_fn(trainloaders, validationloaders, cfg.num_classes)
+    client_fn = generate_client_fn(trainloaders, valloaders, cfg.num_classes)
 
     ## step 3 define strategy
-    # strategy = fl.server.strategy.FedAvg(fraction_fit=0.00001,
-    #                                      min_fit_clients=cfg.num_clients_per_round_fit,
-    #                                      fraction_evaluate=0.00001,
-    #                                      min_evaluate_clients=cfg.num_clients_per_round_eval,
-    #                                      min_available_clients=cfg.num_clients,
-    #                                      on_fit_config_fn=get_on_fit_config(cfg.config_fit),
-    #                                      evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader))
-
-
-    # strategy = fl.server.strategy.FedAvg(fraction_fit=0.00001,
-    #                                      min_fit_clients=cfg.num_clients_per_round_fit,
-    #                                      fraction_evaluate=0.00001,
-    #                                      min_evaluate_clients=cfg.num_clients_per_round_eval,
-    #                                      min_available_clients=cfg.num_clients,
-    #                                      on_fit_config_fn=get_on_fit_config(cfg.config_fit),
-    #                                     )
-    
     strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
                                          fraction_evaluate=0.5,
                                          )

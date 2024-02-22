@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Dict
+from typing import Dict, Tuple
 from flwr.common import NDArrays
 import flwr as fl
 import torch
@@ -56,7 +56,6 @@ def load_data(num_clients):
         partition_train_test = partition_train_test.map(tokenize_function, batched=True)
         partition_train_test = partition_train_test.remove_columns("text")
         partition_train_test = partition_train_test.rename_column("label", "labels")
-        print(partition_train_test)
 
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
@@ -67,14 +66,18 @@ def load_data(num_clients):
             collate_fn=data_collator,
         )
 
-        testloader = DataLoader(
+        valloader = DataLoader(
             partition_train_test["test"], batch_size=32, collate_fn=data_collator
         )
 
         trainloaders.append(trainloader)
-        valloaders.append(testloader)
+        valloaders.append(valloader)
+    
+    # for the server test
+    testset = fds.load_full("test")
+    testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
 
-    return trainloaders, valloaders
+    return trainloaders, valloaders, testloader
 
 
 def train(net, trainloader, epochs):
@@ -89,16 +92,6 @@ def train(net, trainloader, epochs):
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-
-
-# def train_peft(net, trainloader, epochs):
-#     training_args = TrainingArguments(output_dir="test_trainer", evaluation_strategy="epoch",
-#                                  num_train_epochs=2,)
-#     trainer = Trainer(
-#         model = net,
-#         args=training_args,
-#         train_dataset=
-#     )
 
 
 def test(net, testloader):
@@ -146,29 +139,57 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         self.set_parameters(parameters)
-
-        # lr = config['lr']
-        # momentum = config['momentum']
-        # epochs = config['local_epochs']
-
-        # optim = torch.optim.SGD(self.model.parameters(), lr=lr, momentum=momentum)
-
-        # do local training
-        # train(self.model, self.trainloader, optim, epochs, self.device)
-
         train(self.model, self.trainloader, epochs=1)
-
         return self.get_parameters({}), len(self.trainloader), {}
     
 
     def evaluate(self, parameters, config):
+
         self.set_parameters(parameters)
         # loss, accuracy = test(self.model, self.valloader, self.device)
         loss, accuracy = test(self.model, self.valloader)
         return float(loss), len(self.valloader), {'accuracy': accuracy}
     
 
+class HuaggingFaceClient(fl.client.NumPyClient):
+    def __init__(self, model, tokenizer, train_dataset, testdataset) -> None:
+        super().__init__()
+
+        self.model = model
+        self.tokenizer = tokenizer
+        self.train_dataset = train_dataset
+
+        self.training_args = TrainingArguments(output_dir="./huggingface_output", evaluation_strategy="epoch")
+
+    def get_parameters(self):
+
+        return super().get_parameters([val.cpu().numpy() for _, val in self.model.state_dict().items()])
+
+    def set_parameters(self, parameters):
+
+        params_dict = zip(self.model.state_dict().keys(), parameters)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        self.model.load_state_dict(state_dict, strict=True)
+    
+    def fit(self, parameters, config):
+
+        self.set_parameters(parameters)
+        trainer = Trainer(
+            model = self.model,
+            args=self.training_args,
+            train_dataset=self.train_dataset,
+        )
+        trainer.train()
+        return self.get_parameters(), len(self.train_dataset), {}
+    
+    def evaluate(self, parameters, config):
+
+        self.set_parameters(parameters)
+        return 0.0, len(self.train_dataset), {"accuracy": 0.0}
+
+
 def generate_client_fn(trainloaders, valloaders, num_classes):
+
     def client_fn(cid: str):
         return FlowerClient(model=lora_net,
                             trainloader=trainloaders[int(cid)],
