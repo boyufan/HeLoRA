@@ -49,29 +49,37 @@ def prepare_dataset(num_partitions, batch_size, val_ratio=0.1):
 
 def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alpha=1.0):
 
-    dataset = load_dataset("imdb", split='train')
+    train_dataset = load_dataset("imdb", split='train')
+    test_dataset = load_dataset("imdb", split='test')
+
+    split_dataset = train_dataset.train_test_split(test_size=0.1, seed=2024)
+    train_dataset = split_dataset['train']
+    val_dataset = split_dataset['test']
+
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     def preprocess_function(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
-    tokenized_dataset = dataset.map(preprocess_function, batched=True)
+    tokenized_train_dataset = train_dataset.map(preprocess_function, batched=True)
+    tokenized_val_dataset = val_dataset.map(preprocess_function, batched=True)
+    tokenized_test_dataset = test_dataset.map(preprocess_function, batched=True)
 
-    client_datasets = []
+    client_traindata = []
 
     if iid:
-        total_size = len(tokenized_dataset)
+        total_size = len(tokenized_train_dataset)
         per_client_size = total_size // num_clients
         indices = np.random.permutation(total_size)
         for i in range(num_clients):
             start_idx = i * per_client_size
             end_idx = (i + 1) * per_client_size if i < num_clients - 1 else total_size
             client_indices = indices[start_idx:end_idx]
-            client_dataset = tokenized_dataset.select(client_indices)
-            client_datasets.append(client_dataset)
+            client_dataset = tokenized_train_dataset.select(client_indices)
+            client_traindata.append(client_dataset)
 
     # TODO: non-IID
     
-    print(client_datasets)
-    return client_dataset
+    print(client_traindata)
+    return client_traindata, tokenized_test_dataset
 
 
 
