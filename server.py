@@ -1,6 +1,13 @@
 from collections import OrderedDict
+from typing import List, Tuple
+from flwr.common import FitIns, Parameters
+from flwr.server.client_manager import ClientManager
+from flwr.server.client_proxy import ClientProxy
 from omegaconf import DictConfig
 import torch
+
+import flwr as fl
+
 
 from model import Net, test
 
@@ -29,3 +36,18 @@ def get_evaluate_fn(num_classes: int, testloader):
 
     
     return evaluate_fn
+
+
+class HeteroLora(fl.server.strategy.Strategy):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def configure_fit(self, server_round: int, parameters: Parameters, client_manager: ClientManager) -> List[Tuple[ClientProxy | FitIns]]:
+
+
+        return super().configure_fit(server_round, parameters, client_manager)
+
+    def aggregate_fit(self, server_round, parameters, results, failures):
+        return
+    
+    

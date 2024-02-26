@@ -30,6 +30,25 @@ def build_lora_model(model):
     return lora_model
 
 
+def build_hetero_lora_models(model, r_values):
+
+    lora_models = []
+
+    for value in r_values:
+        lora_config = LoraConfig(
+            task_type=TaskType.SEQ_CLS,
+            target_modules=["q_lin", "k_lin"],
+            inference_mode=False,
+            r=value,
+            lora_alpha=32,
+            lora_dropout=0.1
+        )
+        lora_model = get_peft_model(model, lora_config)
+        lora_models.append(lora_model)
+    # lora_model.print_trainable_parameters()
+    return lora_models
+
+
 
 # training_args = TrainingArguments(
 #     output_dir="outputs/bigscience/mt0-large-lora",

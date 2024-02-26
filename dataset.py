@@ -6,8 +6,56 @@ from torchvision.datasets import MNIST
 import numpy as np
 
 from datasets import load_dataset
+from transformers import AutoTokenizer, DataCollatorWithPadding
 
-from transformers import AutoTokenizer
+from flwr_datasets import FederatedDataset
+
+
+def load_dataset(num_clients, CHECKPOINT):
+    """Load IMDB data (training and eval)"""
+    fds = FederatedDataset(dataset="imdb", partitioners={"train": 5})
+
+    trainloaders = []
+    valloaders = []
+
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], truncation=True)
+
+    # assign dataloaders to clients
+    for i in range(num_clients):
+        partition = fds.load_partition(i)
+
+        partition_train_test = partition.train_test_split(test_size=0.2)
+        partition_train_test = partition_train_test.map(tokenize_function, batched=True)
+        partition_train_test = partition_train_test.remove_columns("text")
+        partition_train_test = partition_train_test.rename_column("label", "labels")
+
+        data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+        trainloader = DataLoader(
+            partition_train_test["train"],
+            shuffle=True,
+            batch_size=32,
+            collate_fn=data_collator,
+        )
+
+        valloader = DataLoader(
+            partition_train_test["test"], batch_size=32, collate_fn=data_collator
+        )
+
+        trainloaders.append(trainloader)
+        valloaders.append(valloader)
+    
+    # for the server test
+    testset = fds.load_full("test")
+    testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
+
+    return trainloaders, valloaders, testloader
+
+
+
 
 def get_mnist(data_path='./data'):
 

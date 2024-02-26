@@ -1,9 +1,8 @@
 from collections import OrderedDict
-from typing import Dict, Tuple
-from flwr.common import NDArrays
 import flwr as fl
-import torch
+from flwr_datasets import FederatedDataset
 
+import torch
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 
@@ -13,72 +12,23 @@ from transformers import AutoTokenizer, DataCollatorWithPadding
 from transformers import TrainingArguments, Trainer
 from evaluate import load as load_metric
 
-from flwr_datasets import FederatedDataset
-
-from lora import build_lora_model
+from lora import build_lora_model, build_hetero_lora_models
 
 
-# from model import Net, train, test
-
-CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
+# CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
-net = AutoModelForSequenceClassification.from_pretrained(
-        CHECKPOINT, num_labels=2
-    )
+# net = AutoModelForSequenceClassification.from_pretrained(
+#         CHECKPOINT, num_labels=2
+#     )
 
-print(net)
+# print(net)
 
-lora_net = build_lora_model(net)
+# lora_net = build_lora_model(net)
 
-print('#' * 80)
+# print('#' * 80)
 
-print(lora_net)
-
-
-def load_data(num_clients):
-    """Load IMDB data (training and eval)"""
-    fds = FederatedDataset(dataset="imdb", partitioners={"train": 5})
-
-    trainloaders = []
-    valloaders = []
-
-    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
-
-    def tokenize_function(examples):
-        return tokenizer(examples["text"], truncation=True)
-
-    # assign dataloaders to clients
-    for i in range(num_clients):
-        partition = fds.load_partition(i)
-
-        partition_train_test = partition.train_test_split(test_size=0.2)
-        partition_train_test = partition_train_test.map(tokenize_function, batched=True)
-        partition_train_test = partition_train_test.remove_columns("text")
-        partition_train_test = partition_train_test.rename_column("label", "labels")
-
-        data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-
-        trainloader = DataLoader(
-            partition_train_test["train"],
-            shuffle=True,
-            batch_size=32,
-            collate_fn=data_collator,
-        )
-
-        valloader = DataLoader(
-            partition_train_test["test"], batch_size=32, collate_fn=data_collator
-        )
-
-        trainloaders.append(trainloader)
-        valloaders.append(valloader)
-    
-    # for the server test
-    testset = fds.load_full("test")
-    testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
-
-    return trainloaders, valloaders, testloader
-
+# print(lora_net)
 
 def train(net, trainloader, epochs):
     optimizer = AdamW(net.parameters(), lr=5e-5)
@@ -188,13 +138,35 @@ class HuaggingFaceClient(fl.client.NumPyClient):
         return 0.0, len(self.train_dataset), {"accuracy": 0.0}
 
 
-def generate_client_fn(trainloaders, valloaders, num_classes):
+def generate_client_fn(trainloaders, valloaders, num_classes, CHECKPOINT, r, hetero: bool = False):
+
+    net = AutoModelForSequenceClassification.from_pretrained(
+        CHECKPOINT, 
+        num_labels=num_classes
+    )
+
+    # Here we can add a logic to choose homogeneous or heterogeneous
+
+    if not hetero:
+        print("homogeneous setting")
+        lora_net = build_lora_model(net)
+
+    else:
+        print("heterogeneous setting")
+        lora_nets = build_hetero_lora_models(net, r)
+
 
     def client_fn(cid: str):
-        return FlowerClient(model=lora_net,
+        if not hetero:
+            return FlowerClient(model=lora_net,
                             trainloader=trainloaders[int(cid)],
                             valloader=valloaders[int(cid)],
                             num_class=num_classes).to_client()
+        else:
+            return FlowerClient(model=lora_nets[int(cid)],
+                                trainloader=trainloaders[int(cid)],
+                                valloader=valloaders[int(cid)],
+                                num_class=num_classes).to_client()
     return client_fn
 
 
