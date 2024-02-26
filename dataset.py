@@ -5,7 +5,7 @@ from torchvision.datasets import MNIST
 
 import numpy as np
 
-from datasets import load_dataset
+from datasets import load_dataset as load_datasets
 from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from flwr_datasets import FederatedDataset
@@ -97,8 +97,8 @@ def prepare_dataset(num_partitions, batch_size, val_ratio=0.1):
 
 def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alpha=1.0):
 
-    train_dataset = load_dataset("imdb", split='train')
-    test_dataset = load_dataset("imdb", split='test')
+    train_dataset = load_datasets("imdb", split='train')
+    test_dataset = load_datasets("imdb", split='test')
 
     split_dataset = train_dataset.train_test_split(test_size=0.1, seed=2024)
     train_dataset = split_dataset['train']
