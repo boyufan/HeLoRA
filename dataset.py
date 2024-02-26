@@ -93,20 +93,53 @@ def prepare_dataset(num_partitions, batch_size, val_ratio=0.1):
 
     return trainloaders, valloaders, testloader
 
+def get_dataset(dataset_name, local_data_dir=None):
 
+    if dataset_name in ["gsm8k"]:
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        train_dataset = load_datasets(dataset_name, split="train", name="main")
+        test_dataset = load_datasets(dataset_name, split='test', name="main")
+    elif dataset_name in ["imdb"]:
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        train_dataset = load_datasets(dataset_name, split='train')
+        test_dataset = load_datasets(dataset_name, split='test')
+    elif dataset_name in ["lighteval/MATH"]:
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        train_dataset = load_datasets(dataset_name, split="train", name="all")
+        test_dataset = load_datasets(dataset_name, split='test', name="all")
+    elif dataset_name == "HuggingFaceH4/ultrafeedback_binarized":
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        train_dataset = load_datasets(dataset_name, split="train_sft") # 暂时不太清楚能否用test_sft
+        test_dataset = load_datasets(dataset_name, split="test_sft")
+    else:
+        dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
+        train_dataset = load_datasets(dataset_name, split="train")
+        test_dataset = load_datasets(dataset_name, split='test')
+
+    return train_dataset, test_dataset
 
 def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alpha=1.0):
 
-    train_dataset = load_datasets("imdb", split='train')
-    test_dataset = load_datasets("imdb", split='test')
+    train_dataset, test_dataset = get_dataset(dataset_name)
 
     split_dataset = train_dataset.train_test_split(test_size=0.1, seed=2024)
     train_dataset = split_dataset['train']
     val_dataset = split_dataset['test']
 
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    def preprocess_function(examples):
-        return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+
+    if dataset_name in ["imdb"]:
+        def preprocess_function(examples):
+            return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+    elif dataset_name in ["gsm8k"]:
+        def preprocess_function(examples):
+            return tokenizer(examples["question"], padding="max_length", truncation=True, max_length=128)
+    elif dataset_name in ["lighteval/MATH"]:
+        def preprocess_function(examples):
+            return tokenizer(examples["problem"], padding="max_length", truncation=True, max_length=128)
+    else:
+        raise NotImplementedError(f"Dataset {dataset_name} is not supported.")
+    print(train_dataset)
     tokenized_train_dataset = train_dataset.map(preprocess_function, batched=True)
     tokenized_val_dataset = val_dataset.map(preprocess_function, batched=True)
     tokenized_test_dataset = test_dataset.map(preprocess_function, batched=True)
@@ -132,7 +165,7 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
 
 
 if __name__ == "__main__":
-    load_huggingface_dataset("imdb", 10)
+    load_huggingface_dataset("lighteval/MATH", 10)
 
 
 
