@@ -10,6 +10,13 @@ from dataset import load_huggingface_dataset
 from client import generate_client_fn
 from server import get_evaluate_fn, get_on_fit_config
 
+# Start server
+def weighted_average(metrics):
+    accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
+    # losses = [num_examples * m["loss"] for num_examples, m in metrics]
+    examples = [num_examples for num_examples, _ in metrics]
+    return {"accuracy": sum(accuracies) / sum(examples)}
+
 @hydra.main(config_path="conf", config_name="base", version_base=None)
 def main(cfg: DictConfig):
 
@@ -25,6 +32,7 @@ def main(cfg: DictConfig):
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
     strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
                                          fraction_evaluate=0.5,
+                                         evaluate_metrics_aggregation_fn=weighted_average,
                                          )
     
     ## step 4: start simulation
@@ -33,7 +41,7 @@ def main(cfg: DictConfig):
         num_clients=cfg.num_clients,
         config=fl.server.ServerConfig(num_rounds=cfg.num_rounds),
         strategy=strategy,
-        client_resources={'num_cpus': 2, 'num_gpus': 0},
+        client_resources={'num_cpus': 2, 'num_gpus': 1},
         # ray_init_args={"include_dashboard": True}
     )
 
