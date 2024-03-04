@@ -5,9 +5,10 @@ from torchvision.datasets import MNIST
 
 import numpy as np
 
-from datasets import load_dataset as load_datasets
-from transformers import AutoTokenizer, DataCollatorWithPadding
-
+from datasets import load_dataset as load_datasets,  load_from_disk
+# from modelscope import MsDataset
+from transformers import  DataCollatorWithPadding
+from modelscope import AutoModel, AutoTokenizer
 from flwr_datasets import FederatedDataset
 
 
@@ -93,7 +94,9 @@ def prepare_dataset(num_partitions, batch_size, val_ratio=0.1):
 
     return trainloaders, valloaders, testloader
 
-def get_dataset(dataset_name, local_data_dir=None):
+
+
+def get_dataset(dataset_name, local_data_dir='./data/'):
 
     if dataset_name in ["gsm8k"]:
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
@@ -101,8 +104,8 @@ def get_dataset(dataset_name, local_data_dir=None):
         test_dataset = load_datasets(dataset_name, split='test', name="main")
     elif dataset_name in ["imdb"]:
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
-        train_dataset = load_datasets(dataset_name, split='train')
-        test_dataset = load_datasets(dataset_name, split='test')
+        raw_dataset = load_from_disk(dataset_name)
+        train_dataset, test_dataset = raw_dataset['train'], raw_dataset['test']
     elif dataset_name in ["lighteval/MATH"]:
         dataset_name = local_data_dir + dataset_name if local_data_dir is not None else dataset_name
         train_dataset = load_datasets(dataset_name, split="train", name="all")
@@ -118,7 +121,7 @@ def get_dataset(dataset_name, local_data_dir=None):
 
     return train_dataset, test_dataset
 
-def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alpha=1.0):
+def load_huggingface_dataset(dataset_name: str, num_clients: int, checkpoint='AI-ModelScope/distilbert-base-uncased', iid=True, alpha=1.0):
 
     train_dataset, test_dataset = get_dataset(dataset_name)
 
@@ -126,7 +129,7 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
     train_dataset = split_dataset['train']
     val_dataset = split_dataset['test']
 
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 
     if dataset_name in ["imdb"]:
         def preprocess_function(examples):
@@ -139,7 +142,7 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
             return tokenizer(examples["problem"], padding="max_length", truncation=True, max_length=128)
     else:
         raise NotImplementedError(f"Dataset {dataset_name} is not supported.")
-    print(train_dataset)
+    # print(train_dataset)
     tokenized_train_dataset = train_dataset.map(preprocess_function, batched=True)
     tokenized_val_dataset = val_dataset.map(preprocess_function, batched=True)
     tokenized_test_dataset = test_dataset.map(preprocess_function, batched=True)
@@ -165,7 +168,7 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
 
 
 if __name__ == "__main__":
-    load_huggingface_dataset("lighteval/MATH", 10)
+    load_huggingface_dataset("imdb", 10)
 
 
 

@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from flwr.common import FitIns, Parameters
 from flwr.server.client_manager import ClientManager
 from flwr.server.client_proxy import ClientProxy
@@ -42,7 +42,8 @@ class HeteroLora(fl.server.strategy.Strategy):
     def __init__(self) -> None:
         super().__init__()
 
-    def configure_fit(self, server_round: int, parameters: Parameters, client_manager: ClientManager) -> List[Tuple[ClientProxy | FitIns]]:
+    def configure_fit(self, server_round: int, parameters: Parameters, client_manager: ClientManager) -> List[Tuple[
+        Union[ClientProxy, FitIns]]]:
 
 
         return super().configure_fit(server_round, parameters, client_manager)

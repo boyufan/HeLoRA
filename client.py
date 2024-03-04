@@ -7,8 +7,9 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 
 from transformers import AutoModelForSeq2SeqLM
-from transformers import AutoModelForSequenceClassification
-from transformers import AutoTokenizer, DataCollatorWithPadding
+# from transformers import AutoModelForSequenceClassification
+from modelscope import AutoModelForSequenceClassification
+from transformers import  DataCollatorWithPadding
 from transformers import TrainingArguments, Trainer
 from evaluate import load as load_metric
 
@@ -30,14 +31,18 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # print(lora_net)
 
-def train(net, trainloader, epochs):
+def train(net, trainloader, config, epochs):
     optimizer = AdamW(net.parameters(), lr=5e-5)
     net.train()
     net.to(DEVICE)
     for _ in range(epochs):
         for batch in trainloader:
-            batch = {k: v.to(DEVICE) for k, v in batch.items()}
-            outputs = net(**batch)
+            # print(batch)
+            input_ids = torch.tensor(batch['input_ids']).to(DEVICE)
+            attention_mask = torch.tensor(batch['attention_mask']).to(DEVICE)
+            labels = torch.tensor(batch['label']).to(DEVICE)
+
+            outputs = net(input_ids, attention_mask=attention_mask, labels=labels)
             loss = outputs.loss
             loss.backward()
             optimizer.step()
@@ -50,9 +55,11 @@ def test(net, testloader):
     net.eval()
     net.to(DEVICE)
     for batch in testloader:
-        batch = {k: v.to(DEVICE) for k, v in batch.items()}
+        input_ids = torch.tensor(batch['input_ids']).to(DEVICE)
+        attention_mask = torch.tensor(batch['attention_mask']).to(DEVICE)
+        labels = torch.tensor(batch['label']).to(DEVICE)
         with torch.no_grad():
-            outputs = net(**batch)
+            outputs = net(input_ids, attention_mask=attention_mask, labels=labels)
         logits = outputs.logits
         loss += outputs.loss.item()
         predictions = torch.argmax(logits, dim=-1)
@@ -89,7 +96,7 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         self.set_parameters(parameters)
-        train(self.model, self.trainloader, epochs=1)
+        train(self.model, self.trainloader, config, epochs=1)
         return self.get_parameters({}), len(self.trainloader), {}
     
 

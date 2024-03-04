@@ -6,7 +6,7 @@ from pathlib import Path
 
 import flwr as fl
 
-from dataset import load_dataset
+from dataset import load_huggingface_dataset
 from client import generate_client_fn
 from server import get_evaluate_fn, get_on_fit_config
 
@@ -15,11 +15,11 @@ def main(cfg: DictConfig):
 
     ## step 1: load dataset
     #TODO: Generalize the load_dataset function, make it can load different datasets and set different iid/non-iid settings
-    trainloaders, valloaders, testloader = load_dataset(cfg.num_clients, cfg.checkpoint)
+    trainloaders,  testloader = load_huggingface_dataset(cfg.dataset_name, cfg.num_clients, cfg.checkpoint)
 
     ## step 2 define client
     # this function needs every details about clients
-    client_fn = generate_client_fn(trainloaders, valloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero)
+    client_fn = generate_client_fn(trainloaders, testloader, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero)
 
     ## step 3 define strategy
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
@@ -33,7 +33,8 @@ def main(cfg: DictConfig):
         num_clients=cfg.num_clients,
         config=fl.server.ServerConfig(num_rounds=cfg.num_rounds),
         strategy=strategy,
-        client_resources={'num_cpus': 2, 'num_gpus': 1.0},
+        client_resources={'num_cpus': 2, 'num_gpus': 0},
+        # ray_init_args={"include_dashboard": True}
     )
 
     ## step 6: save results

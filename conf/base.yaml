@@ -7,6 +7,9 @@ num_classes: 10
 num_clients_per_round_fit: 2
 num_clients_per_round_eval: 2
 checkpoint: "distilbert-base-uncased"
+dataset_name: "imdb"
+r: 8
+hetero: False
 config_fit:
   lr: 0.001
   momentum: 0.9
