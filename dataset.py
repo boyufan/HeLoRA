@@ -5,7 +5,7 @@ from torchvision.datasets import MNIST
 
 import numpy as np
 
-from datasets import load_dataset
+# from datasets import load_dataset
 from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from flwr_datasets import FederatedDataset

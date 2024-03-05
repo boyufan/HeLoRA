@@ -38,6 +38,15 @@ def get_evaluate_fn(num_classes: int, testloader):
     return evaluate_fn
 
 
+def weighted_average(metrics):
+    # Multiply accuracy of each client by number of examples used
+    accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
+    examples = [num_examples for num_examples, _ in metrics]
+
+    # Aggregate and return custom metric (weighted average)
+    return {"accuracy": sum(accuracies) / sum(examples)}
+
+
 class HeteroLora(fl.server.strategy.Strategy):
     def __init__(self) -> None:
         super().__init__()

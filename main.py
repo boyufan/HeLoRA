@@ -8,16 +8,10 @@ import flwr as fl
 
 from dataset import load_dataset
 from client import generate_client_fn
-from server import get_evaluate_fn, get_on_fit_config
+from server import get_evaluate_fn, get_on_fit_config, weighted_average
 
 
-def weighted_average(metrics):
-    # Multiply accuracy of each client by number of examples used
-    accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
-    examples = [num_examples for num_examples, _ in metrics]
 
-    # Aggregate and return custom metric (weighted average)
-    return {"accuracy": sum(accuracies) / sum(examples)}
 
 @hydra.main(config_path="conf", config_name="base", version_base=None)
 def main(cfg: DictConfig):
