@@ -98,6 +98,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.set_parameters(parameters)
         # loss, accuracy = test(self.model, self.valloader, self.device)
         loss, accuracy = test(self.model, self.valloader)
+        # print(f'loss: {loss}, accuracy: {accuracy}')
         return float(loss), len(self.valloader), {'accuracy': accuracy}
     
 

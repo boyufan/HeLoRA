@@ -10,6 +10,15 @@ from dataset import load_dataset
 from client import generate_client_fn
 from server import get_evaluate_fn, get_on_fit_config
 
+
+def weighted_average(metrics):
+    # Multiply accuracy of each client by number of examples used
+    accuracies = [num_examples * m["accuracy"] for num_examples, m in metrics]
+    examples = [num_examples for num_examples, _ in metrics]
+
+    # Aggregate and return custom metric (weighted average)
+    return {"accuracy": sum(accuracies) / sum(examples)}
+
 @hydra.main(config_path="conf", config_name="base", version_base=None)
 def main(cfg: DictConfig):
 
@@ -25,6 +34,7 @@ def main(cfg: DictConfig):
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
     strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
                                          fraction_evaluate=0.5,
+                                         evaluate_metrics_aggregation_fn=weighted_average,
                                          )
     
     ## step 4: start simulation
