@@ -25,11 +25,13 @@ def get_evaluate_fn(num_classes: int, testloader):
 
     def evaluate_fn(server_round, parameters, config):
 
-        model = Net(num_classes)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = Net
+
         params_dict = zip(model.state_dict().keys(), parameters)
         state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
         model.load_state_dict(state_dict, strict=True)
+
         loss, accuracy = test(model, testloader, device)
 
         return loss, {"accuracy": accuracy}

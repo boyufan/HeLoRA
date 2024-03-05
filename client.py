@@ -18,17 +18,6 @@ from lora import build_lora_model, build_hetero_lora_models
 # CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
-# net = AutoModelForSequenceClassification.from_pretrained(
-#         CHECKPOINT, num_labels=2
-#     )
-
-# print(net)
-
-# lora_net = build_lora_model(net)
-
-# print('#' * 80)
-
-# print(lora_net)
 
 def train(net, trainloader, epochs):
     optimizer = AdamW(net.parameters(), lr=5e-5)
@@ -63,12 +52,12 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, model, trainloader, valloader, num_class) -> None:
+    def __init__(self, model, trainloader, num_class) -> None:
         super().__init__()
 
         self.model = model
         self.trainloader = trainloader
-        self.valloader = valloader
+        # self.valloader = valloader
         # self.model = Net(num_class)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -93,13 +82,13 @@ class FlowerClient(fl.client.NumPyClient):
         return self.get_parameters({}), len(self.trainloader), {}
     
 
-    def evaluate(self, parameters, config):
+    # def evaluate(self, parameters, config):
 
-        self.set_parameters(parameters)
-        # loss, accuracy = test(self.model, self.valloader, self.device)
-        loss, accuracy = test(self.model, self.valloader)
-        # print(f'loss: {loss}, accuracy: {accuracy}')
-        return float(loss), len(self.valloader), {'accuracy': accuracy}
+    #     self.set_parameters(parameters)
+    #     # loss, accuracy = test(self.model, self.valloader, self.device)
+    #     loss, accuracy = test(self.model, self.valloader)
+    #     # print(f'loss: {loss}, accuracy: {accuracy}')
+    #     return float(loss), len(self.valloader), {'accuracy': accuracy}
     
 
 class HuaggingFaceClient(fl.client.NumPyClient):
@@ -139,7 +128,7 @@ class HuaggingFaceClient(fl.client.NumPyClient):
         return 0.0, len(self.train_dataset), {"accuracy": 0.0}
 
 
-def generate_client_fn(trainloaders, valloaders, num_classes, CHECKPOINT, r, hetero: bool = False):
+def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = False):
 
     net = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
@@ -148,25 +137,23 @@ def generate_client_fn(trainloaders, valloaders, num_classes, CHECKPOINT, r, het
 
     # Here we can add a logic to choose homogeneous or heterogeneous
 
-    if not hetero:
-        print("homogeneous setting")
-        lora_net = build_lora_model(net)
+    # if not hetero:
+    #     print("homogeneous setting")
+    #     lora_net = build_lora_model(net)
 
-    else:
-        print("heterogeneous setting")
-        lora_nets = build_hetero_lora_models(net, r)
+    # else:
+    #     print("heterogeneous setting")
+    #     lora_nets = build_hetero_lora_models(net, r)
 
 
     def client_fn(cid: str):
         if not hetero:
-            return FlowerClient(model=lora_net,
+            return FlowerClient(model=net,
                             trainloader=trainloaders[int(cid)],
-                            valloader=valloaders[int(cid)],
                             num_class=num_classes).to_client()
         else:
-            return FlowerClient(model=lora_nets[int(cid)],
+            return FlowerClient(model=net[int(cid)],
                                 trainloader=trainloaders[int(cid)],
-                                valloader=valloaders[int(cid)],
                                 num_class=num_classes).to_client()
     return client_fn
 
