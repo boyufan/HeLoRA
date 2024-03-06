@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from transformers import AutoModelForSequenceClassification
 
 from evaluate import load as load_metric
+from lora import build_lora_model
 
 
 # hardcode the model at the moment
@@ -14,8 +15,7 @@ Net = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
         num_labels=2
     )
-
-
+# Net = build_lora_model(Net)
 
 
 # class Net(nn.Module):
@@ -89,9 +89,7 @@ def test(net, testloader, device):
     loss = 0
     net.eval()
     net.to(device)
-    print(net)
     for batch in testloader:
-        print("this is batch: ", batch)
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
             outputs = net(**batch)

@@ -12,6 +12,7 @@ from server import get_evaluate_fn, get_on_fit_config, weighted_average
 from model import Net
 
 import torch
+import time
 
 
 @hydra.main(config_path="conf", config_name="base", version_base=None)
@@ -56,4 +57,7 @@ def main(cfg: DictConfig):
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     main()
+    end_time = time.time()
+    print(f"training spends {(end_time-start_time):.2f} seconds")

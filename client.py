@@ -14,10 +14,8 @@ from evaluate import load as load_metric
 
 from lora import build_lora_model, build_hetero_lora_models
 
-
 # CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
-
 
 def train(net, trainloader, epochs):
     optimizer = AdamW(net.parameters(), lr=5e-5)
@@ -137,22 +135,22 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
 
     # Here we can add a logic to choose homogeneous or heterogeneous
 
-    # if not hetero:
-    #     print("homogeneous setting")
-    #     lora_net = build_lora_model(net)
+    if not hetero:
+        print("homogeneous setting")
+        lora_net = build_lora_model(net)
 
-    # else:
-    #     print("heterogeneous setting")
-    #     lora_nets = build_hetero_lora_models(net, r)
+    else:
+        print("heterogeneous setting")
+        lora_nets = build_hetero_lora_models(net, r)
 
 
     def client_fn(cid: str):
         if not hetero:
-            return FlowerClient(model=net,
+            return FlowerClient(model=lora_net,
                             trainloader=trainloaders[int(cid)],
                             num_class=num_classes).to_client()
         else:
-            return FlowerClient(model=net[int(cid)],
+            return FlowerClient(model=lora_nets[int(cid)],
                                 trainloader=trainloaders[int(cid)],
                                 num_class=num_classes).to_client()
     return client_fn

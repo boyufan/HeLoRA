@@ -3,20 +3,21 @@ from peft import LoraConfig, get_peft_model, TaskType
 import torch
 
 from transformers import AutoModelForSeq2SeqLM, TrainingArguments, Trainer
+from transformers import AutoModelForSequenceClassification
 
 from peft import LoraConfig, TaskType
 
-# peft_config = LoraConfig(task_type=TaskType.SEQ_2_SEQ_LM, 
-#                          inference_mode=False, 
-#                          r=8, 
-#                          lora_alpha=32, 
-#                          lora_dropout=0.1
-#                          )
+
+CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
+MODEL = AutoModelForSequenceClassification.from_pretrained(
+        CHECKPOINT, 
+        num_labels=2
+    )
 
 
 def build_lora_model(model):
     
-    # model = AutoModelForSeq2SeqLM.from_pretrained("bigscience/mt0-large")
+    # print(f"model without lora:\n {model}")
     lora_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         target_modules=["q_lin", "k_lin"],
@@ -26,6 +27,7 @@ def build_lora_model(model):
         lora_dropout=0.1
     )
     lora_model = get_peft_model(model, lora_config)
+    # print(f"model after lora:\n {lora_model}")
     # lora_model.print_trainable_parameters()
     return lora_model
 
@@ -73,3 +75,6 @@ def build_hetero_lora_models(model, r_values):
 # )
 
 # trainer.train()
+
+if __name__ == "__main__":
+    lora = build_lora_model(MODEL)
