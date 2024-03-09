@@ -15,7 +15,7 @@ Net = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
         num_labels=2
     )
-# Net = build_lora_model(Net)
+Net = build_lora_model(Net)
 
 
 # class Net(nn.Module):
