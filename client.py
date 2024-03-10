@@ -89,6 +89,7 @@ class FlowerClient(fl.client.NumPyClient):
     
 
     def _truncate_model(self, parameters, cid, r):
+        """Truncate the global model to fit the local model's parameter"""
 
         params_dict = zip(self.model.state_dict().keys(), parameters)
         state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
