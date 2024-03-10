@@ -1,11 +1,16 @@
+from typing import List, OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from flwr.common import parameters_to_ndarrays
 
 from transformers import AutoModelForSequenceClassification
 
 from evaluate import load as load_metric
 from lora import build_lora_model
+
+import numpy as np
 
 
 # hardcode the model at the moment
@@ -17,6 +22,41 @@ Net = AutoModelForSequenceClassification.from_pretrained(
     )
 Net = build_lora_model(Net)
 
+def get_parameters(net) -> List[np.ndarray]:
+    """Return the parameters of model as numpy.NDArrays."""
+    return [val.cpu().numpy() for _, val in net.state_dict().items()]
+
+
+def set_parameters(net, parameters: List[np.ndarray]):
+    """Set the model parameters with given parameters."""
+    params_dict = zip(net.state_dict().keys(), parameters)
+    state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+    net.load_state_dict(state_dict, strict=True)
+
+
+def get_state_dict_from_param(model, parameters):
+    """Get the state dict from model & parameters as np.NDarrays.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The neural network.
+    parameters : np.NDarray
+        Parameters of the model as np.NDarrays.
+
+    Returns
+    -------
+    Dict
+        state dict of model.
+    """
+    # Load the parameters into the model
+    for param_tensor, param_ndarray in zip(
+        model.state_dict(), parameters_to_ndarrays(parameters)
+    ):
+        model.state_dict()[param_tensor].copy_(torch.from_numpy(param_ndarray))
+    # Step 3: Obtain the state_dict of the model
+    state_dict = model.state_dict()
+    return state_dict
 
 # class Net(nn.Module):
 #     def __init__(self, num_classes) -> None:

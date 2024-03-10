@@ -1,9 +1,11 @@
 ---
 
 num_rounds: 2
-num_clients: 5
+num_clients: 2
 batch_size: 20
 num_classes: 2
+# r: [6,6,7,7,8]
+# r: [7,8]
 r: 8
 hetero: False
 num_clients_per_round_fit: 2

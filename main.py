@@ -9,7 +9,8 @@ import flwr as fl
 from dataset import load_federated_data
 from client import generate_client_fn
 from server import get_evaluate_fn, get_on_fit_config, weighted_average
-from model import Net
+from model import Net, get_parameters
+from strategy import HeteroLoRA
 
 import torch
 import time
@@ -30,13 +31,22 @@ def main(cfg: DictConfig):
 
     ## step 3 define strategy
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
-    strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
-                                         fraction_evaluate=0.5,
-                                         evaluate_fn=get_evaluate_fn(cfg.num_classes,
-                                                                     testloader),
-                                        #  evaluate_metrics_aggregation_fn=weighted_average,
-                                         )
+    # strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
+    #                                      fraction_evaluate=0.5,
+    #                                      evaluate_fn=get_evaluate_fn(cfg.num_classes,
+    #                                                                  testloader),
+    #                                     #  evaluate_metrics_aggregation_fn=weighted_average,
+    #                                      )
     
+    params = get_parameters(Net)
+
+    strategy = HeteroLoRA(Net, 
+                          fraction_fit=1.0,
+                          min_fit_clients=2,
+                          min_available_clients=2,
+                          initial_parameters=fl.common.ndarrays_to_parameters(params)) # set the initial parameter on the server side
+
+
     ## step 4: start simulation
     history = fl.simulation.start_simulation(
         client_fn=client_fn,

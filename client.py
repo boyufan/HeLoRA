@@ -50,14 +50,17 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, model, trainloader, num_class) -> None:
+    def __init__(self, cid, model, trainloader, num_class) -> None:
         super().__init__()
 
         self.model = model
+        self.cid = cid
         self.trainloader = trainloader
         # self.valloader = valloader
         # self.model = Net(num_class)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # print(self.model)
+        print(self.cid)
     
 
     def set_parameters(self, parameters):
@@ -75,9 +78,16 @@ class FlowerClient(fl.client.NumPyClient):
     def fit(self, parameters, config):
 
         # copy parameters sent by the server into client's local model
+        # here to add extra truncate
+        parameters = self._truncate_model(parameters, self.cid)
         self.set_parameters(parameters)
         train(self.model, self.trainloader, epochs=1)
         return self.get_parameters({}), len(self.trainloader), {}
+    
+    def _truncate_model(self, parameters, cid):
+        #TODO: implement truncate here
+        return parameters
+
     
 
     # def evaluate(self, parameters, config):
@@ -147,10 +157,12 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
     def client_fn(cid: str):
         if not hetero:
             return FlowerClient(model=lora_net,
+                                cid=cid,
                             trainloader=trainloaders[int(cid)],
                             num_class=num_classes).to_client()
         else:
             return FlowerClient(model=lora_nets[int(cid)],
+                                cid=cid,
                                 trainloader=trainloaders[int(cid)],
                                 num_class=num_classes).to_client()
     return client_fn

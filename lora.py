@@ -1,6 +1,7 @@
 
 from peft import LoraConfig, get_peft_model, TaskType
 import torch
+import copy
 
 from transformers import AutoModelForSeq2SeqLM, TrainingArguments, Trainer
 from transformers import AutoModelForSequenceClassification
@@ -37,6 +38,8 @@ def build_hetero_lora_models(model, r_values):
     lora_models = []
 
     for value in r_values:
+        print(f"the current r is: {value}")
+        model_copy = copy.deepcopy(model)
         lora_config = LoraConfig(
             task_type=TaskType.SEQ_CLS,
             target_modules=["q_lin", "k_lin"],
@@ -45,9 +48,11 @@ def build_hetero_lora_models(model, r_values):
             lora_alpha=32,
             lora_dropout=0.1
         )
-        lora_model = get_peft_model(model, lora_config)
+        lora_model = get_peft_model(model_copy, lora_config)
         lora_models.append(lora_model)
     # lora_model.print_trainable_parameters()
+        
+    print(f"the heterogeneous models are: {lora_models}")
     return lora_models
 
 
