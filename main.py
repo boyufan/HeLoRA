@@ -38,6 +38,7 @@ def main(cfg: DictConfig):
     #                                     #  evaluate_metrics_aggregation_fn=weighted_average,
     #                                      )
     
+    # r=8
     params = get_parameters(Net)
 
     strategy = HeteroLoRA(Net, 

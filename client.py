@@ -50,12 +50,13 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, cid, model, trainloader, num_class) -> None:
+    def __init__(self, cid, model, trainloader, r, num_class) -> None:
         super().__init__()
 
         self.model = model
         self.cid = cid
         self.trainloader = trainloader
+        self.r = r
         # self.valloader = valloader
         # self.model = Net(num_class)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -84,8 +85,30 @@ class FlowerClient(fl.client.NumPyClient):
         train(self.model, self.trainloader, epochs=1)
         return self.get_parameters({}), len(self.trainloader), {}
     
-    def _truncate_model(self, parameters, cid):
-        #TODO: implement truncate here
+
+    def _truncate_model(self, parameters, cid, r):
+        #TODO: implement truncate here, to be tested!!!
+        params_dict = zip(self.model.state_dict().keys(), parameters)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        adapted_state_dict = state_dict.copy()
+
+        for key in state_dict.keys():
+            if "q_lin.lora" in key or "k_lin_lora" in key:
+                tensor = state_dict[key]
+                if "weight" in key:
+                    if tensor.size(1) > r:
+                        adapted_tensor = tensor[:, :r, ...]
+                    elif tensor.size(1) < r:
+                        padding = torch.zeros((tensor.size(0), r - tensor.size(1), *tensor.size()[2:]), dtype=tensor.dtype)
+                        adapted_tensor = torch.cat([tensor, padding], dim=1)
+                    else:
+                        adapted_tensor = tensor
+                    adapted_state_dict[key] = adapted_tensor
+
+        # change back to parameter
+        new_parameters = [v for k, v in adapted_state_dict.items()]
+
+        # return new_parameters
         return parameters
 
     
@@ -159,11 +182,13 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
             return FlowerClient(model=lora_net,
                                 cid=cid,
                             trainloader=trainloaders[int(cid)],
+                            r=r,
                             num_class=num_classes).to_client()
         else:
             return FlowerClient(model=lora_nets[int(cid)],
                                 cid=cid,
                                 trainloader=trainloaders[int(cid)],
+                                r=r,
                                 num_class=num_classes).to_client()
     return client_fn
 

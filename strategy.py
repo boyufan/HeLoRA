@@ -78,6 +78,7 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
 
     def initialize_parameters(self, client_manager: ClientManager) -> Parameters | None:
         ndarrays = get_parameters(self.net)
+        # 返回序列化的模型参数（bytes）
         return fl.common.ndarrays_to_parameters(ndarrays)
 
 
