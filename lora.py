@@ -52,7 +52,7 @@ def build_hetero_lora_models(model, r_values):
         lora_models.append(lora_model)
     # lora_model.print_trainable_parameters()
         
-    print(f"the heterogeneous models are: {lora_models}")
+    # print(f"the heterogeneous models are: {lora_models}")
     return lora_models
 
 

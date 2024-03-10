@@ -80,36 +80,35 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         # here to add extra truncate
-        parameters = self._truncate_model(parameters, self.cid)
+        print(f'the type of parameters: {type(parameters)}')
+        parameters = self._truncate_model(parameters, self.cid, self.r)
         self.set_parameters(parameters)
         train(self.model, self.trainloader, epochs=1)
+        print("local train finished!")
         return self.get_parameters({}), len(self.trainloader), {}
     
 
     def _truncate_model(self, parameters, cid, r):
-        #TODO: implement truncate here, to be tested!!!
+
         params_dict = zip(self.model.state_dict().keys(), parameters)
         state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
         adapted_state_dict = state_dict.copy()
-
-        for key in state_dict.keys():
-            if "q_lin.lora" in key or "k_lin_lora" in key:
-                tensor = state_dict[key]
-                if "weight" in key:
-                    if tensor.size(1) > r:
-                        adapted_tensor = tensor[:, :r, ...]
-                    elif tensor.size(1) < r:
-                        padding = torch.zeros((tensor.size(0), r - tensor.size(1), *tensor.size()[2:]), dtype=tensor.dtype)
-                        adapted_tensor = torch.cat([tensor, padding], dim=1)
-                    else:
-                        adapted_tensor = tensor
-                    adapted_state_dict[key] = adapted_tensor
+        
+        for key, tensor in adapted_state_dict.items():
+            if "lora_A.default.weight" in key or "lora_B.default.weight" in key:
+                if "lora_A" in key:
+                    adjusted_tensor = tensor[:r, :]
+                else:
+                    adjusted_tensor = tensor[:, :r]
+                adapted_state_dict[key] = adjusted_tensor
+            else:
+                adapted_state_dict[key] = tensor
 
         # change back to parameter
         new_parameters = [v for k, v in adapted_state_dict.items()]
 
-        # return new_parameters
-        return parameters
+        return new_parameters
+        # return parameters
 
     
 
@@ -188,7 +187,7 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
             return FlowerClient(model=lora_nets[int(cid)],
                                 cid=cid,
                                 trainloader=trainloaders[int(cid)],
-                                r=r,
+                                r=r[int(cid)],
                                 num_class=num_classes).to_client()
     return client_fn
 
