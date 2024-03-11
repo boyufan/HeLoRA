@@ -49,6 +49,7 @@ def build_hetero_lora_models(model, r_values):
             lora_dropout=0.1
         )
         lora_model = get_peft_model(model_copy, lora_config)
+        # print(f"model after lora:\n {lora_model}")
         lora_models.append(lora_model)
     # lora_model.print_trainable_parameters()
         
