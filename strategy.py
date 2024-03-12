@@ -15,7 +15,7 @@ from model import get_parameters
 
 
 class HeteroLoRA(fl.server.strategy.FedAvg):
-    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values):
+    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero):
         super().__init__()
         self.net = net
         self.fraction_fit = fraction_fit
@@ -24,6 +24,7 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         self.evaluate_fn = evaluate_fn
         self.initial_parameters = initial_parameters
         self.r_values = r_values
+        self.hetero = hetero
 
 
     def initialize_parameters(self, client_manager: ClientManager) -> Parameters | None:
@@ -35,22 +36,25 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
     def aggregate_fit(self, server_round: int, results: List[Tuple[ClientProxy | FitRes]], failures: List[Tuple[ClientProxy, FitRes] | BaseException]) -> Tuple[Parameters | Dict[str, bool | bytes | float | int | str] | None]:
         
         print("start aggregating the parameters")
-        results = sorted(results, key=lambda x: int(x[0].cid))
-        parameters = [fit_res.parameters for _, fit_res in results]
-        
-        parameters_in_ndarrays = [parameters_to_ndarrays(parameter) for parameter in parameters]
-        padded_parameters = self._zero_padding(parameters_in_ndarrays, self.r_values)
-        padded_parameters_in_ndarrays = [ndarrays_to_parameters(padded_parameter) for padded_parameter in padded_parameters]
+        if self.hetero:
+            results = sorted(results, key=lambda x: int(x[0].cid))
+            parameters = [fit_res.parameters for _, fit_res in results]
+            
+            parameters_in_ndarrays = [parameters_to_ndarrays(parameter) for parameter in parameters]
+            padded_parameters = self._zero_padding(parameters_in_ndarrays, self.r_values)
+            padded_parameters_in_ndarrays = [ndarrays_to_parameters(padded_parameter) for padded_parameter in padded_parameters]
 
-        updated_results = []
+            updated_results = []
 
-        for result, padded_param in zip(results, padded_parameters_in_ndarrays):
-            updated_result = (result[0], result[1])
-            updated_result[1].parameters = padded_param
-            updated_results.append(updated_result)
+            for result, padded_param in zip(results, padded_parameters_in_ndarrays):
+                updated_result = (result[0], result[1])
+                updated_result[1].parameters = padded_param
+                updated_results.append(updated_result)
+            
+            return super().aggregate_fit(server_round, updated_results, failures)
 
-        # return super().aggregate_fit(server_round, results, failures)
-        return super().aggregate_fit(server_round, updated_results, failures)
+        return super().aggregate_fit(server_round, results, failures)
+    
     
     def _zero_padding(self, parameters, r_values, max_r=8):
         '''Perform zero_padding for models with smaller r than the global one'''

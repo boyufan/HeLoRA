@@ -18,7 +18,6 @@ MODEL = AutoModelForSequenceClassification.from_pretrained(
 
 def build_lora_model(model):
     
-    # print(f"model without lora:\n {model}")
     lora_config = LoraConfig(
         task_type=TaskType.SEQ_CLS,
         target_modules=["q_lin", "k_lin"],
@@ -28,7 +27,6 @@ def build_lora_model(model):
         lora_dropout=0.1
     )
     lora_model = get_peft_model(model, lora_config)
-    # print(f"model after lora:\n {lora_model}")
     # lora_model.print_trainable_parameters()
     return lora_model
 
@@ -38,7 +36,6 @@ def build_hetero_lora_models(model, r_values):
     lora_models = []
 
     for value in r_values:
-        print(f"the current r is: {value}")
         model_copy = copy.deepcopy(model)
         lora_config = LoraConfig(
             task_type=TaskType.SEQ_CLS,
@@ -49,11 +46,8 @@ def build_hetero_lora_models(model, r_values):
             lora_dropout=0.1
         )
         lora_model = get_peft_model(model_copy, lora_config)
-        # print(f"model after lora:\n {lora_model}")
         lora_models.append(lora_model)
     # lora_model.print_trainable_parameters()
-        
-    # print(f"the heterogeneous models are: {lora_models}")
     return lora_models
 
 

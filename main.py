@@ -47,7 +47,8 @@ def main(cfg: DictConfig):
                           min_available_clients=2,
                           evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader),
                           initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
-                          r_values=cfg.r) 
+                          r_values=cfg.r,
+                          hetero=cfg.hetero) 
 
     ## step 4: start simulation
     history = fl.simulation.start_simulation(

@@ -14,7 +14,6 @@ from evaluate import load as load_metric
 
 from lora import build_lora_model, build_hetero_lora_models
 
-# CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
 def train(net, trainloader, epochs):
@@ -50,18 +49,19 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, cid, model, trainloader, r, num_class) -> None:
+    def __init__(self, cid, model, trainloader, r, num_class, hetero) -> None:
         super().__init__()
 
         self.model = model
         self.cid = cid
         self.trainloader = trainloader
         self.r = r
+        self.hetero = hetero
         # self.valloader = valloader
         # self.model = Net(num_class)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # print(self.model)
-        print(self.cid)
+        print(f"the current client is {self.cid}")
     
 
     def set_parameters(self, parameters):
@@ -80,8 +80,8 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         # here to add extra truncate
-        print(f'the type of parameters: {type(parameters)}')
-        parameters = self._truncate_model(parameters, self.cid, self.r)
+        if self.hetero:
+            parameters = self._truncate_model(parameters, self.cid, self.r)
         self.set_parameters(parameters)
         train(self.model, self.trainloader, epochs=1)
         print("local train finished!")
@@ -109,7 +109,6 @@ class FlowerClient(fl.client.NumPyClient):
         new_parameters = [v for k, v in adapted_state_dict.items()]
 
         return new_parameters
-        # return parameters
 
     
 
@@ -166,8 +165,6 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
         num_labels=num_classes
     )
 
-    # Here we can add a logic to choose homogeneous or heterogeneous
-
     if not hetero:
         print("homogeneous setting")
         lora_net = build_lora_model(net)
@@ -176,20 +173,21 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
         print("heterogeneous setting")
         lora_nets = build_hetero_lora_models(net, r)
 
-
     def client_fn(cid: str):
         if not hetero:
             return FlowerClient(model=lora_net,
                                 cid=cid,
-                            trainloader=trainloaders[int(cid)],
-                            r=r,
-                            num_class=num_classes).to_client()
+                                trainloader=trainloaders[int(cid)],
+                                r=r,
+                                num_class=num_classes,
+                                hetero=hetero).to_client()
         else:
             return FlowerClient(model=lora_nets[int(cid)],
                                 cid=cid,
                                 trainloader=trainloaders[int(cid)],
                                 r=r[int(cid)],
-                                num_class=num_classes).to_client()
+                                num_class=num_classes,
+                                hetero=hetero).to_client()
     return client_fn
 
 
