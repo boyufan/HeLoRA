@@ -48,7 +48,8 @@ def main(cfg: DictConfig):
                           evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader),
                           initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
                           r_values=cfg.r,
-                          hetero=cfg.hetero) 
+                          hetero=cfg.hetero,
+                          padding_strategy=cfg.padding_strategy) 
 
     ## step 4: start simulation
     history = fl.simulation.start_simulation(
