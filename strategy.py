@@ -14,7 +14,6 @@ import torch
 from model import get_parameters
 
 
-#TODO: change aggregate strategy: 1) obtain the heterogeneous model parameters 2) padding-zero 3) aggregate
 class HeteroLoRA(fl.server.strategy.FedAvg):
     def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values):
         super().__init__()
