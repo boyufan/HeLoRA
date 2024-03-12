@@ -45,9 +45,9 @@ def main(cfg: DictConfig):
                           fraction_fit=1.0,
                           min_fit_clients=2,
                           min_available_clients=2,
-                          initial_parameters=fl.common.ndarrays_to_parameters(params),
-                          r_values=cfg.r) # set the initial parameter on the server side
-
+                          evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader),
+                          initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
+                          r_values=cfg.r) 
 
     ## step 4: start simulation
     history = fl.simulation.start_simulation(

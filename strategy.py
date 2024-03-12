@@ -16,12 +16,13 @@ from model import get_parameters
 
 #TODO: change aggregate strategy: 1) obtain the heterogeneous model parameters 2) padding-zero 3) aggregate
 class HeteroLoRA(fl.server.strategy.FedAvg):
-    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, initial_parameters, r_values):
+    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values):
         super().__init__()
         self.net = net
         self.fraction_fit = fraction_fit
         self.min_fit_clients = min_fit_clients
         self.min_available_clients = min_available_clients
+        self.evaluate_fn = evaluate_fn
         self.initial_parameters = initial_parameters
         self.r_values = r_values
 
@@ -54,7 +55,6 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
     
     def _zero_padding(self, parameters, r_values, max_r=8):
         '''Perform zero_padding for models with smaller r than the global one'''
-        # 这里的逻辑是通过外部的r_values来判断哪个模型需要padding，但存在的问题是传入的parameters的顺序是随机的，并不一定和r_values的顺序一一对应
 
         padded_parameters = []
 
@@ -66,18 +66,18 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
 
             for key, tensor in state_dict.items():
                 if "lora_A.default.weight" in key or "lora_B.default.weight" in key:
-                    print(f"current r is {r}")
+                    # print(f"current r is {r}")
                     padding_size = max_r - r
-                    print(f"find lora, the padding size is {padding_size}")
+                    # print(f"find lora, the padding size is {padding_size}")
                     if padding_size > 0:
                         if "lora_A.default.weight" in key:
-                            print(f'the current dimension of loraA before padding is {tensor.shape}')
+                            # print(f'the current dimension of loraA before padding is {tensor.shape}')
                             padded_tensor = torch.cat([tensor, torch.zeros(padding_size, tensor.size(1))], dim=0)
-                            print(f'the current dimension of loraA is {padded_tensor.shape}')
+                            # print(f'the current dimension of loraA is {padded_tensor.shape}')
                         elif "lora_B.default.weight" in key:
-                            print(f'the current dimension of loraB before padding is {tensor.shape}')
+                            # print(f'the current dimension of loraB before padding is {tensor.shape}')
                             padded_tensor = torch.cat([tensor, torch.zeros(tensor.size(0), padding_size)], dim=1)
-                            print(f'the current dimension of loraB is {padded_tensor.shape}')
+                            # print(f'the current dimension of loraB is {padded_tensor.shape}')
                     else:
                         padded_tensor = tensor
                     adapted_state_dict[key] = padded_tensor
@@ -89,6 +89,10 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             
         
         return padded_parameters
+    
+
+    def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:
+        return super().evaluate(server_round, parameters)
 
 
 
