@@ -12,10 +12,12 @@ import flwr as fl
 import torch
 
 from model import get_parameters
+from utilis import MutualEnsemble
+from dataset import load_public_data
 
 
 class HeteroLoRA(fl.server.strategy.FedAvg):
-    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero, padding_strategy="zero"):
+    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero, hetero_nets, padding_strategy="zero"):
         super().__init__()
         self.net = net
         self.fraction_fit = fraction_fit
@@ -26,6 +28,7 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         self.r_values = r_values
         self.hetero = hetero
         self.padding_strategy = padding_strategy
+        self.hetero_nets = hetero_nets
 
 
     def initialize_parameters(self, client_manager: ClientManager) -> Parameters | None:
@@ -47,6 +50,8 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
                 padded_parameters = self._zero_padding(parameters_in_ndarrays, self.r_values)
             elif self.padding_strategy == "mean":
                 padded_parameters = self._mean_padding(parameters_in_ndarrays, self.r_values)
+            elif self.padding_strategy == "linear":
+                padded_parameters = self._linear_padding(parameters_in_ndarrays, self.r_values)
 
             padded_parameters_in_ndarrays = [ndarrays_to_parameters(padded_parameter) for padded_parameter in padded_parameters]
 
@@ -129,6 +134,91 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             padded_parameters.append(padded_parameter)
             
         return padded_parameters
+    
+
+    def _linear_padding(self, parameters, r_values, max_r=8):
+        '''Perform linear padding for models with smaller r than the global one'''
+
+        padded_parameters = []
+
+        for parameter, r in zip(parameters, r_values):
+            params_dict = zip(self.net.state_dict().keys(), parameter)
+            state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
+
+            adapted_state_dict = OrderedDict()
+
+            for key, tensor in state_dict.items():
+                padding_size = max_r - r
+                if "lora_A.default.weight" in key or "lora_B.default.weight" in key:
+                    if padding_size > 0:
+                        # Determine padding for lora_A and lora_B differently based on their dimensions
+                        if "lora_A.default.weight" in key:
+                            # Padding on the last dimension for lora_A
+                            values_to_interpolate = tensor.mean(dim=0, keepdim=True).expand(padding_size, -1)
+                            padded_tensor = torch.cat([tensor, values_to_interpolate], dim=0)
+                        elif "lora_B.default.weight" in key:
+                            # Padding on the last dimension for lora_B
+                            values_to_interpolate = tensor.mean(dim=1, keepdim=True).expand(-1, padding_size)
+                            padded_tensor = torch.cat([tensor, values_to_interpolate], dim=1)
+                    else:
+                        padded_tensor = tensor
+                    adapted_state_dict[key] = padded_tensor
+                else:
+                    adapted_state_dict[key] = tensor
+                    
+            padded_parameter = [tensor.cpu().numpy() for tensor in adapted_state_dict.values()]
+            padded_parameters.append(padded_parameter)
+            
+        return padded_parameters
+    
+
+    def _kd_aggregate(self, parameters, hetero_nets):
+        '''Perform knowledge distillation to aggregate'''
+
+        # step 1: train as usual on the public dataset
+        # step 2: get the average logit
+        # step 3: calculate the soft loss
+
+        ensemble_model = MutualEnsemble(hetero_nets)
+
+        def train(net, trainloader, epochs):
+            optimizer = AdamW(net.parameters(), lr=5e-5)
+            net.train()
+            net.to(DEVICE)
+            for _ in range(epochs):
+                for batch in trainloader:
+                    batch = {k: v.to(DEVICE) for k, v in batch.items()}
+                    outputs = net(**batch)
+                    loss = outputs.loss
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+        trainloader = load_public_data("imdb")
+        for batch in trainloader:
+            batch = {k: v.to(DEVICE) for k, v in batch.items()}
+            avg_logit = ensemble_model(**batch)
+            
+
+
+        hetero_nets = hetero_nets.copy()
+
+        
+
+        for parameter, net in zip(parameters, hetero_nets):
+
+            params_dict = zip(net.state_dict().keys(), parameter)
+            state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
+            net.load_state_dict(state_dict)
+            
+
+
+        logits = [model(parameter) for parameter in parameters]
+        avg_logit = logits / len(parameters)
+        # train, soft_loss + hard_loss on public dataset
+        # update the parameters
+
+
     
 
     def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:

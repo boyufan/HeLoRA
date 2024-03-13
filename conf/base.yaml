@@ -1,6 +1,6 @@
 ---
 
-num_rounds: 1
+num_rounds: 5
 num_clients: 3
 batch_size: 20
 num_classes: 2
@@ -8,7 +8,7 @@ num_classes: 2
 r: [6,7,8]
 # r: 8
 hetero: True
-padding_strategy: "zero"
+padding_strategy: "linear"
 num_clients_per_round_fit: 3
 num_clients_per_round_eval: 3
 checkpoint: "distilbert-base-uncased"

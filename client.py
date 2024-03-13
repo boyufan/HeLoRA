@@ -188,7 +188,7 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
                                 r=r[int(cid)],
                                 num_class=num_classes,
                                 hetero=hetero).to_client()
-    return client_fn
+    return client_fn, lora_net, lora_nets
 
 
 def main():

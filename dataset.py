@@ -10,6 +10,8 @@ from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from flwr_datasets import FederatedDataset
 
+CHECKPOINT = "distilbert-base-uncased"
+
 def load_federated_data_withval(num_clients, CHECKPOINT):
     """Load data (train, validate and test)"""
     fds = FederatedDataset(dataset="imdb", partitioners={"train": num_clients})
@@ -93,7 +95,7 @@ def load_federated_data(num_clients, CHECKPOINT):
     testset = testset.remove_columns("text")
     testset = testset.rename_column("label", "labels")
 
-    testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
+    testloader = DataLoader(testset, batch_size=32)
 
     return trainloaders, testloader
 
@@ -172,6 +174,20 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
     print(client_traindata)
     return client_traindata, tokenized_test_dataset
 
+
+def load_public_data(dataset_name):
+
+    dataset = load_dataset(dataset_name)
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+    def preprocess_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+    tokenized_dataset = dataset.map(preprocess_function, batched=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    train_dataloader = DataLoader(tokenized_dataset['train'], shuffle=True, batch_size=8, collate_fn=data_collator)
+
+    return train_dataloader
+    
 
 
 if __name__ == "__main__":

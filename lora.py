@@ -7,6 +7,8 @@ from transformers import AutoModelForSeq2SeqLM, TrainingArguments, Trainer
 from transformers import AutoModelForSequenceClassification
 
 from peft import LoraConfig, TaskType
+from dataset import load_public_data, load_federated_data
+from torch.optim import AdamW
 
 
 CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
@@ -14,6 +16,7 @@ MODEL = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
         num_labels=2
     )
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
 
 def build_lora_model(model):
@@ -76,5 +79,26 @@ def build_hetero_lora_models(model, r_values):
 
 # trainer.train()
 
+def train(net, trainloader, epochs):
+    optimizer = AdamW(net.parameters(), lr=5e-5)
+    net.train()
+    net.to(DEVICE)
+    for _ in range(epochs):
+        for batch in trainloader:
+            batch = {k: v.to(DEVICE) for k, v in batch.items()}
+            print(f"batch is {batch}")
+            outputs = net(**batch)
+            print(f"output is {outputs}")
+            loss = outputs.loss
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+            break
+
+
 if __name__ == "__main__":
     lora = build_lora_model(MODEL)
+    trainloader, _ = load_federated_data(1, CHECKPOINT)
+    train(lora, trainloader[0], 1)
+
+    # print(lora.state_dict())
