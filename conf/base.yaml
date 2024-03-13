@@ -1,13 +1,16 @@
 ---
 
-num_rounds: 2
-num_clients: 5
+num_rounds: 1
+num_clients: 3
 batch_size: 20
-num_classes: 10
-r: 8
-hetero: False
-num_clients_per_round_fit: 2
-num_clients_per_round_eval: 2
+num_classes: 2
+# r: [6,6,7,7,8]
+r: [6,7,8]
+# r: 8
+hetero: True
+padding_strategy: "zero"
+num_clients_per_round_fit: 3
+num_clients_per_round_eval: 3
 checkpoint: "distilbert-base-uncased"
 config_fit:
   lr: 0.001

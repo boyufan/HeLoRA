@@ -5,15 +5,14 @@ from torchvision.datasets import MNIST
 
 import numpy as np
 
-# from datasets import load_dataset
+from datasets import load_dataset
 from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from flwr_datasets import FederatedDataset
 
-
-def load_dataset(num_clients, CHECKPOINT):
-    """Load IMDB data (training and eval)"""
-    fds = FederatedDataset(dataset="imdb", partitioners={"train": 5})
+def load_federated_data_withval(num_clients, CHECKPOINT):
+    """Load data (train, validate and test)"""
+    fds = FederatedDataset(dataset="imdb", partitioners={"train": num_clients})
 
     trainloaders = []
     valloaders = []
@@ -50,9 +49,53 @@ def load_dataset(num_clients, CHECKPOINT):
     
     # for the server test
     testset = fds.load_full("test")
+    testset = testset.map(tokenize_function, batched=True)
+    testset = testset.remove_columns("text")
+    testset = testset.rename_column("label", "labels")
+
     testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
 
     return trainloaders, valloaders, testloader
+
+
+def load_federated_data(num_clients, CHECKPOINT):
+    """Load data (train and test)"""
+    fds = FederatedDataset(dataset="imdb", partitioners={"train": num_clients})
+
+    trainloaders = []
+
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], truncation=True)
+
+    # assign dataloaders to clients
+    for i in range(num_clients):
+        partition = fds.load_partition(i)
+        partition = partition.map(tokenize_function, batched=True)
+        partition = partition.remove_columns("text")
+        partition = partition.rename_column("label", "labels")
+
+        data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+        trainloader = DataLoader(
+            partition,
+            shuffle=True,
+            batch_size=32,
+            collate_fn=data_collator,
+        )
+
+        trainloaders.append(trainloader)
+    
+    # for the server test
+    testset = fds.load_full("test")
+    testset = testset.map(tokenize_function, batched=True)
+    testset = testset.remove_columns("text")
+    testset = testset.rename_column("label", "labels")
+
+    testloader = DataLoader(testset, batch_size=32, collate_fn=data_collator)
+
+    return trainloaders, testloader
 
 
 
@@ -132,7 +175,11 @@ def load_huggingface_dataset(dataset_name: str, num_clients: int, iid=True, alph
 
 
 if __name__ == "__main__":
-    load_huggingface_dataset("imdb", 10)
+    # load_huggingface_dataset("imdb", 10)
+    CHECKPOINT = "distilbert-base-uncased"
+    load_federated_data(5, CHECKPOINT)
+
+
 
 
 
