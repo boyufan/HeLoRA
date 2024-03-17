@@ -1,13 +1,14 @@
-from typing import List, OrderedDict
+from typing import List, OrderedDict, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from flwr.common import parameters_to_ndarrays
 
-from transformers import AutoModelForSequenceClassification
+from transformers import AutoModelForSequenceClassification, DistilBertForSequenceClassification, DistilBertTokenizer
 
 from evaluate import load as load_metric
+from transformers.modeling_outputs import SequenceClassifierOutput
 from lora import build_lora_model
 
 import numpy as np
@@ -21,6 +22,24 @@ Net = AutoModelForSequenceClassification.from_pretrained(
         num_labels=2
     )
 Net = build_lora_model(Net)
+
+
+class DistilBertForKD(DistilBertForSequenceClassification):
+    def forward(self, 
+                input_ids=None, 
+                attention_mask=None, 
+                head_mask=None,
+                inputs_embeds=None, 
+                labels=None,
+                output_attentions=None,
+                output_hidden_states=None, 
+                return_dict=None):
+        
+
+        
+        return super().forward(input_ids, attention_mask, head_mask, inputs_embeds, labels, output_attentions, output_hidden_states, return_dict)
+
+
 
 def get_parameters(net) -> List[np.ndarray]:
     """Return the parameters of model as numpy.NDArrays."""
@@ -140,3 +159,5 @@ def test(net, testloader, device):
     loss /= len(testloader.dataset)
     accuracy = metric.compute()["accuracy"]
     return loss, accuracy
+
+

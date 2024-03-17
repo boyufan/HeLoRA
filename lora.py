@@ -4,7 +4,7 @@ import torch
 import copy
 
 from transformers import AutoModelForSeq2SeqLM, TrainingArguments, Trainer
-from transformers import AutoModelForSequenceClassification
+from transformers import AutoModelForSequenceClassification, AutoConfig
 
 from peft import LoraConfig, TaskType
 from dataset import load_public_data, load_federated_data
@@ -12,9 +12,12 @@ from torch.optim import AdamW
 
 
 CHECKPOINT = "distilbert-base-uncased"  # transformer model checkpoint
+config = AutoConfig.from_pretrained(CHECKPOINT, output_hidden_states=True)
+
 MODEL = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
-        num_labels=2
+        # num_labels=2,
+        config=config
     )
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
@@ -53,7 +56,9 @@ def build_hetero_lora_models(model, r_values):
     # lora_model.print_trainable_parameters()
     return lora_models
 
-
+def hook_function(module, input, output):
+    print(f"loraB output is {output}")
+    
 
 # training_args = TrainingArguments(
 #     output_dir="outputs/bigscience/mt0-large-lora",
@@ -86,19 +91,24 @@ def train(net, trainloader, epochs):
     for _ in range(epochs):
         for batch in trainloader:
             batch = {k: v.to(DEVICE) for k, v in batch.items()}
-            print(f"batch is {batch}")
+            # print(f"batch is {batch}")
             outputs = net(**batch)
-            print(f"output is {outputs}")
+            # print(f"output is {outputs}")
+            # print(f"the length is {len(outputs.hidden_states)}")
             loss = outputs.loss
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            break
+            # break
 
 
 if __name__ == "__main__":
     lora = build_lora_model(MODEL)
+    # print(lora)
+    lora_B_layer = lora.base_model.model.distilbert.transformer.layer[5].attention.q_lin.lora_B.default
+    hook = lora_B_layer.register_forward_hook(hook_function)
     trainloader, _ = load_federated_data(1, CHECKPOINT)
     train(lora, trainloader[0], 1)
+    hook.remove()
 
     # print(lora.state_dict())

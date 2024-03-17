@@ -179,42 +179,48 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         # step 2: get the average logit
         # step 3: calculate the soft loss
 
-        ensemble_model = MutualEnsemble(hetero_nets)
 
-        def train(net, trainloader, epochs):
-            optimizer = AdamW(net.parameters(), lr=5e-5)
-            net.train()
-            net.to(DEVICE)
-            for _ in range(epochs):
-                for batch in trainloader:
-                    batch = {k: v.to(DEVICE) for k, v in batch.items()}
-                    outputs = net(**batch)
-                    loss = outputs.loss
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
+        # step 1: load the parameter
 
-        trainloader = load_public_data("imdb")
-        for batch in trainloader:
-            batch = {k: v.to(DEVICE) for k, v in batch.items()}
-            avg_logit = ensemble_model(**batch)
-            
-
-
-        hetero_nets = hetero_nets.copy()
-
-        
+        current_net = []
 
         for parameter, net in zip(parameters, hetero_nets):
 
             params_dict = zip(net.state_dict().keys(), parameter)
             state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
             net.load_state_dict(state_dict)
+            current_net.append(net)
+        
+
+        # step 2: start mutual learning
             
+        # ensemble_model = MutualEnsemble(current_net)
+
+        # criterion = KLDiv()
+        
+        # for epoch in range(1):
+        #     for batch in dataloader:
+        #         avg_logit = ensemble_model(batch)
+                
+        #         for index, model in enumerate(current_net):
+        #             model.zero_grad()
+        #             logits = model(batch)
+        #             # calculate the kl_loss between the avg_logits and each logit
+        #             loss_kd = criterion(logits, avg_logit)
+        #             loss_ce = 0
+        #             loss_final = loss_kd + loss_ce
+        #             loss_final.backward()
+        #             optim.step()
 
 
-        logits = [model(parameter) for parameter in parameters]
-        avg_logit = logits / len(parameters)
+        
+
+        # hetero_nets = hetero_nets.copy()
+
+        
+
+        # logits = [model(parameter) for parameter in parameters]
+        # avg_logit = logits / len(parameters)
         # train, soft_loss + hard_loss on public dataset
         # update the parameters
 

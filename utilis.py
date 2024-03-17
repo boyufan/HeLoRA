@@ -7,6 +7,9 @@ from sklearn import metrics
 import torch.nn.functional as F
 import copy
 
+def hook_function(module, input, output):
+    print(f"loraB output is {output}")
+
 
 def kldiv(logits, targets, T=1.0, reduction='batchmean'):
     q = F.log_softmax(logits / T, dim=1)
@@ -19,6 +22,7 @@ class MutualEnsemble(torch.nn.Module):
         super(MutualEnsemble, self).__init__()
         self.models = model_list
 
+    # x is batch
     def forward(self, x):
         logits_total = 0
         for i in range(len(self.models)):
