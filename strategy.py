@@ -47,6 +47,8 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
                 padded_parameters = self._zero_padding(parameters_in_ndarrays, self.r_values)
             elif self.padding_strategy == "mean":
                 padded_parameters = self._mean_padding(parameters_in_ndarrays, self.r_values)
+            elif self.padding_strategy == "linear":
+                padded_parameters = self._linear_padding(parameters_in_ndarrays, self.r_values) 
 
             padded_parameters_in_ndarrays = [ndarrays_to_parameters(padded_parameter) for padded_parameter in padded_parameters]
 
@@ -119,6 +121,42 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
                             padded_tensor = torch.cat([tensor, mean_value.expand(padding_size, tensor.size(1))], dim=0)
                         elif "lora_B.default.weight" in key:
                             padded_tensor = torch.cat([tensor, mean_value.expand(tensor.size(0), padding_size)], dim=1)
+                    else:
+                        padded_tensor = tensor
+                    adapted_state_dict[key] = padded_tensor
+                else:
+                    adapted_state_dict[key] = tensor
+                    
+            padded_parameter = [tensor.cpu().numpy() for tensor in adapted_state_dict.values()]
+            padded_parameters.append(padded_parameter)
+            
+        return padded_parameters
+    
+
+    def _linear_padding(self, parameters, r_values, max_r=8):
+        '''Perform linear padding for models with smaller r than the global one'''
+
+        padded_parameters = []
+
+        for parameter, r in zip(parameters, r_values):
+            params_dict = zip(self.net.state_dict().keys(), parameter)
+            state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
+
+            adapted_state_dict = OrderedDict()
+
+            for key, tensor in state_dict.items():
+                padding_size = max_r - r
+                if "lora_A.default.weight" in key or "lora_B.default.weight" in key:
+                    if padding_size > 0:
+                        # Determine padding for lora_A and lora_B differently based on their dimensions
+                        if "lora_A.default.weight" in key:
+                            # Padding on the last dimension for lora_A
+                            values_to_interpolate = tensor.mean(dim=0, keepdim=True).expand(padding_size, -1)
+                            padded_tensor = torch.cat([tensor, values_to_interpolate], dim=0)
+                        elif "lora_B.default.weight" in key:
+                            # Padding on the last dimension for lora_B
+                            values_to_interpolate = tensor.mean(dim=1, keepdim=True).expand(-1, padding_size)
+                            padded_tensor = torch.cat([tensor, values_to_interpolate], dim=1)
                     else:
                         padded_tensor = tensor
                     adapted_state_dict[key] = padded_tensor
