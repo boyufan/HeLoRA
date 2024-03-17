@@ -27,7 +27,7 @@ def main(cfg: DictConfig):
     ## step 2 define client
     # this function needs every details about clients
     # If one wants to validate at the client side, an extra parameter valloaders needs to be added
-    client_fn = generate_client_fn(trainloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero)
+    client_fn, global_net, heterogeneous_nets = generate_client_fn(trainloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero)
 
     ## step 3 define strategy
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
@@ -49,6 +49,7 @@ def main(cfg: DictConfig):
                           initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
                           r_values=cfg.r,
                           hetero=cfg.hetero,
+                          hetero_net=heterogeneous_nets,
                           padding_strategy=cfg.padding_strategy) 
 
     ## step 4: start simulation

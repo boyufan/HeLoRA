@@ -167,11 +167,13 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
 
     if not hetero:
         print("homogeneous setting")
-        lora_net = build_lora_model(net)
+        # lora_net = build_lora_model(net)
 
     else:
         print("heterogeneous setting")
-        lora_nets = build_hetero_lora_models(net, r)
+        # lora_nets = build_hetero_lora_models(net, r)
+    lora_net = build_lora_model(net)
+    lora_nets = build_hetero_lora_models(net, r)
 
     def client_fn(cid: str):
         if not hetero:
@@ -188,7 +190,7 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
                                 r=r[int(cid)],
                                 num_class=num_classes,
                                 hetero=hetero).to_client()
-    return client_fn
+    return client_fn, lora_net, lora_nets
 
 
 def main():

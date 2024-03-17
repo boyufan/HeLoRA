@@ -15,7 +15,7 @@ from model import get_parameters
 
 
 class HeteroLoRA(fl.server.strategy.FedAvg):
-    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero, padding_strategy="zero"):
+    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero, hetero_net, padding_strategy="zero"):
         super().__init__()
         self.net = net
         self.fraction_fit = fraction_fit
@@ -25,6 +25,7 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         self.initial_parameters = initial_parameters
         self.r_values = r_values
         self.hetero = hetero
+        self.hetero_net = hetero_net
         self.padding_strategy = padding_strategy
 
 
@@ -168,6 +169,27 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             
         return padded_parameters
     
+
+    def _kd_aggregate(self, parameters, hetero_nets):
+        # step 1: get the lora outputs of all heterogeneous models (key: how to get the lora output from forward())
+        # step 2: calculate the average lora output
+        # step 3: calculate the kl_div with each model
+        # step 4: update the heterogeneous models with kl loss
+        current_net = []
+
+        # load the parameters
+        for parameter, net in zip(parameters, hetero_nets):
+
+            params_dict = zip(net.state_dict().keys(), parameter)
+            state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
+            net.load_state_dict(state_dict)
+            current_net.append(net)
+        
+        # 
+
+        return parameters
+
+
 
     def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:
         return super().evaluate(server_round, parameters)
