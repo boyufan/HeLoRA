@@ -24,6 +24,7 @@ class MutualEnsemble(torch.nn.Module):
 
     # x is batch
     def forward(self, x):
+        lora_b_output = []
         logits_total = 0
         for i in range(len(self.models)):
             logits = self.models[i](x)
