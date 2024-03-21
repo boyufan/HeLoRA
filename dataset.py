@@ -97,7 +97,18 @@ def load_federated_data(num_clients, CHECKPOINT):
 
     return trainloaders, testloader
 
+def load_public_data(dataset_name):
 
+    dataset = load_dataset(dataset_name)
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+    def preprocess_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+    tokenized_dataset = dataset.map(preprocess_function, batched=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    train_dataloader = DataLoader(tokenized_dataset['train'], shuffle=True, batch_size=32, collate_fn=data_collator)
+
+    return train_dataloader
 
 
 def get_mnist(data_path='./data'):

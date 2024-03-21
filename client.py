@@ -49,7 +49,7 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, cid, model, trainloader, r, num_class, hetero) -> None:
+    def __init__(self, cid, model, trainloader, r, num_class, hetero, apply_kd) -> None:
         super().__init__()
 
         self.model = model
@@ -59,6 +59,7 @@ class FlowerClient(fl.client.NumPyClient):
         self.hetero = hetero
         # self.valloader = valloader
         # self.model = Net(num_class)
+        self.apply_kd = apply_kd
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # print(self.model)
         print(f"the current client is {self.cid}")
@@ -69,7 +70,7 @@ class FlowerClient(fl.client.NumPyClient):
         params_dict = zip(self.model.state_dict().keys(), parameters)
         state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
         self.model.load_state_dict(state_dict, strict=True)
-
+    
 
     def get_parameters(self, config):
         
@@ -80,8 +81,13 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         # here to add extra truncate
-        if self.hetero:
+        print(f"the shape of parameters: {len(parameters)}")
+        
+        if self.hetero and not self.apply_kd:
+            print(f"truncate the parameters")
             parameters = self._truncate_model(parameters, self.cid, self.r)
+        # 对于KD，在set_parameters这里要作单独的对应处理！
+        # 现在的问题是只能从server段收到一个全局模型，没有办法收到多个模型参数，这个是现在的瓶颈
         self.set_parameters(parameters)
         train(self.model, self.trainloader, epochs=1)
         print("local train finished!")
@@ -158,7 +164,7 @@ class HuaggingFaceClient(fl.client.NumPyClient):
         return 0.0, len(self.train_dataset), {"accuracy": 0.0}
 
 
-def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = False):
+def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = False, apply_kd: bool = False):
 
     net = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
@@ -182,14 +188,16 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
                                 trainloader=trainloaders[int(cid)],
                                 r=r,
                                 num_class=num_classes,
-                                hetero=hetero).to_client()
+                                hetero=hetero,
+                                apply_kd=apply_kd).to_client()
         else:
             return FlowerClient(model=lora_nets[int(cid)],
                                 cid=cid,
                                 trainloader=trainloaders[int(cid)],
                                 r=r[int(cid)],
                                 num_class=num_classes,
-                                hetero=hetero).to_client()
+                                hetero=hetero,
+                                apply_kd=apply_kd).to_client()
     return client_fn, lora_net, lora_nets
 
 

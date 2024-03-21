@@ -10,8 +10,13 @@ from flwr.server.strategy import FedAvg
 import flwr as fl
 
 import torch
+from torch.optim import AdamW
 
 from model import get_parameters
+from utilis import MutualEnsemble, KLDiv
+from dataset import load_public_data
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
 
 class HeteroLoRA(fl.server.strategy.FedAvg):
@@ -50,6 +55,12 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
                 padded_parameters = self._mean_padding(parameters_in_ndarrays, self.r_values)
             elif self.padding_strategy == "linear":
                 padded_parameters = self._linear_padding(parameters_in_ndarrays, self.r_values) 
+            elif self.padding_strategy == "kd":
+                kd_parameters = self._kd_aggregate(parameters_in_ndarrays, self.hetero_net)
+                # 这里返回的是一组参数值，但正常流程返回的是聚合后的一个全局模型参数，这里该怎么办呢？
+                
+                # kd_parameters_in_ndarrays = [ndarrays_to_parameters(kd_parameter) for kd_parameter in kd_parameters]
+                # return kd_parameters_in_ndarrays, {}
 
             padded_parameters_in_ndarrays = [ndarrays_to_parameters(padded_parameter) for padded_parameter in padded_parameters]
 
@@ -176,6 +187,7 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         # step 3: calculate the kl_div with each model
         # step 4: update the heterogeneous models with kl loss
         current_net = []
+        optimizers = []
 
         # load the parameters
         for parameter, net in zip(parameters, hetero_nets):
@@ -183,11 +195,48 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             params_dict = zip(net.state_dict().keys(), parameter)
             state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
             net.load_state_dict(state_dict)
+            net.train()
             current_net.append(net)
         
-        # 
+        print(f"load finished, the number is {len(current_net)}") 
 
-        return parameters
+        # calculate the average logit
+        ensemble_model = MutualEnsemble(current_net)
+
+        public_dataloader = load_public_data("imdb")
+
+        criterion = KLDiv(T=1)
+
+        optimizer_1 = AdamW(current_net[0].parameters(), lr=5e-5)
+        optimizer_2 = AdamW(current_net[1].parameters(), lr=5e-5)
+        optimizer_3 = AdamW(current_net[2].parameters(), lr=5e-5)
+        optimizers.append(optimizer_1)
+        optimizers.append(optimizer_2)
+        optimizers.append(optimizer_3)
+
+
+        for epoch in range(1):
+            for batch in public_dataloader:
+                batch = {k: v.to(DEVICE) for k, v in batch.itmes()}
+                with torch.no_grad():
+                    average_logit = ensemble_model(**batch)
+                
+                for index, model in enumerate(current_net):
+                    model.zero_grad()
+                    logit = model(**batch).logits
+                    loss_kd = criterion(logit, average_logit)
+                    loss_kd.backward()
+                    optimizers[index].step()
+        
+        # return the updated model parameters
+        return_parameters = []
+
+        for index, model in enumerate(current_net):
+            state_dict_model = model.state_dict()
+            parameter = [tensor.cpu().numpy() for tensor in state_dict_model.values()]
+            return_parameters.append(parameter)
+
+        return return_parameters
 
 
 

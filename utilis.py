@@ -7,6 +7,18 @@ from sklearn import metrics
 import torch.nn.functional as F
 import copy
 
+class KLDiv(nn.Module):
+    def __init__(self, T=1.0, reduction='batchmean'):
+        """
+        :rtype: object
+        """
+        super().__init__()
+        self.T = T
+        self.reduction = reduction
+
+    def forward(self, logits, targets):
+        return kldiv(logits, targets, T=self.T, reduction=self.reduction)
+
 def kldiv(logits, targets, T=1.0, reduction='batchmean'):
     q = F.log_softmax(logits / T, dim=1)
     p = F.softmax(targets / T, dim=1)
@@ -20,10 +32,11 @@ class MutualEnsemble(torch.nn.Module):
 
     # x is batch
     def forward(self, x):
-        logits_total = 0
+        # hard code here, to be improved
+        logits_total = torch.zeros(32, 8)
         for i in range(len(self.models)):
-            logits = self.models[i](x)
-            logits_total += logits
+            logit = self.models[i](**x).logits
+            logits_total += logit
         logits_e = logits_total / len(self.models)
 
         return logits_e
