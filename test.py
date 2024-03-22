@@ -75,6 +75,64 @@ def main():
     print(model)
     # dataloader = get_dataloader("imdb")
     # train(model, dataloader)
+
+
+
+
+
+
+class FlowerClientKD(fl.client.NumPyClient):
+    def __init__(self, model, cid, trainloader, testloader) -> None:
+        super().__init__()
+        self.model = model
+        self.cid = cid
+        self.trainloader = trainloader
+        self.testloader = testloader
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"the current client is {self.cid}")
+    
+
+    def set_parameters(self, parameters):
+        # assume we got the parameters list from the aggregate_fit(), which consists of model parameters for heterogeneous models
+        # then we need to use cid to choose the corresponding one
+        index = int(self.cid) - 1
+        parameter = parameters[index]
+
+        params_dict = zip(self.model.state_dict().keys(), parameter)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        self.model.load_state_dict(state_dict, strict=True)
+    
+
+    def get_parameters(self, config):
+        
+        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+    
+
+    def fit(self, parameters, config):
+        
+        self.set_parameters(parameters)
+        train(self.model, self.trainloader, epochs=1)
+        print("local train finished!")
+        return self.get_parameters({}), len(self.trainloader), {}
+    
+
+
+# def aggregate_fit(self, server_round, results, failures):
+    
+#     results = sorted(results, key=lambda x: int(x[0].cid))
+#     parameters = [fit_res.parameters for _, fit_res in results]
+#     parameters_in_ndarrays = [parameters_to_ndarrays(parameter) for parameter in parameters]
+#     kd_parameters = self._kd_aggregate(parameters_in_ndarrays, self.hetero_net)
+#     kd_parameters = ndarrays_to_parameters(kd_parameters)
+#     return kd_parameters
+
+
+
+
+
+
+
+
     
 
 if __name__ == "__main__":

@@ -115,16 +115,59 @@ class FlowerClient(fl.client.NumPyClient):
         new_parameters = [v for k, v in adapted_state_dict.items()]
 
         return new_parameters
+    
+
+
+class FlowerClientKD(fl.client.NumPyClient):
+    def __init__(self, model, cid, trainloader, testloader) -> None:
+        super().__init__()
+        self.model = model
+        self.cid = cid
+        self.trainloader = trainloader
+        self.testloader = testloader
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"the current client is {self.cid}")
+    
+
+    def set_parameters(self, parameters):
+        index = int(self.cid) - 1
+        parameter = parameters[index]
+        params_dict = zip(self.model.state_dict().keys(), parameter)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        self.model.load_state_dict(state_dict, strict=True)
+    
+
+    def get_parameters(self, config):
+        
+        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+    
+
+    def fit(self, parameters, config):
+
+        # copy parameters sent by the server into client's local model
+        # for the first round, should be the same with the defination
+        print(f"the shape of parameters: {len(parameters)}")
+        print(f"the current server round is ")
+        print(config["current_round"])
+        
+        # 对于KD，在set_parameters这里要作单独的对应处理！
+        # 现在的问题是只能从server段收到一个全局模型，没有办法收到多个模型参数，这个是现在的瓶颈
+        if config["current_round"] != 1:
+            self.set_parameters(parameters)
+        train(self.model, self.trainloader, epochs=1)
+        print("local train finished!")
+        return self.get_parameters({}), len(self.trainloader), {}
 
     
 
-    # def evaluate(self, parameters, config):
-
-    #     self.set_parameters(parameters)
-    #     # loss, accuracy = test(self.model, self.valloader, self.device)
-    #     loss, accuracy = test(self.model, self.valloader)
-    #     # print(f'loss: {loss}, accuracy: {accuracy}')
-    #     return float(loss), len(self.valloader), {'accuracy': accuracy}
+    def evaluate(self, parameters, config):
+        index = int(self.cid) - 1
+        parameter = parameters[index]
+        self.set_parameters(parameter)
+        # loss, accuracy = test(self.model, self.valloader, self.device)
+        loss, accuracy = test(self.model, self.valloader)
+        # print(f'loss: {loss}, accuracy: {accuracy}')
+        return float(loss), len(self.valloader), {'accuracy': accuracy}
     
 
 class HuaggingFaceClient(fl.client.NumPyClient):
@@ -199,6 +242,27 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
                                 hetero=hetero,
                                 apply_kd=apply_kd).to_client()
     return client_fn, lora_net, lora_nets
+
+
+
+def generate_client_fn_kd(trainloaders, testloader, num_classes, CHECKPOINT, r):
+
+    net = AutoModelForSequenceClassification.from_pretrained(
+        CHECKPOINT, 
+        num_labels=num_classes
+    )
+
+    lora_nets = build_hetero_lora_models(net, r)
+
+    def client_fn(cid: str):
+
+        return FlowerClientKD(model=lora_nets[int(cid)],
+                              cid=cid,
+                              trainloader=trainloaders[int(cid)],
+                              testloader=testloader,
+                              )
+
+    return client_fn, lora_nets
 
 
 def main():

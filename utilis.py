@@ -31,12 +31,14 @@ class MutualEnsemble(torch.nn.Module):
         self.models = model_list
 
     # x is batch
-    def forward(self, x):
+    def forward(self, **kwargs):
         # hard code here, to be improved
+        print(f"the input x looks like {kwargs}")
         logits_total = torch.zeros(32, 8)
         for i in range(len(self.models)):
-            logit = self.models[i](**x).logits
+            logit = self.models[i](**kwargs).logits
             logits_total += logit
         logits_e = logits_total / len(self.models)
 
         return logits_e
+    

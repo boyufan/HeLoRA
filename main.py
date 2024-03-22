@@ -7,10 +7,10 @@ from pathlib import Path
 import flwr as fl
 
 from dataset import load_federated_data
-from client import generate_client_fn
+from client import generate_client_fn, generate_client_fn_kd
 from server import get_evaluate_fn, get_on_fit_config, weighted_average
 from model import Net, get_parameters
-from strategy import HeteroLoRA
+from strategy import HeteroLoRA, HeteroLoraKD
 
 import torch
 import time
@@ -27,7 +27,8 @@ def main(cfg: DictConfig):
     ## step 2 define client
     # this function needs every details about clients
     # If one wants to validate at the client side, an extra parameter valloaders needs to be added
-    client_fn, global_net, heterogeneous_nets = generate_client_fn(trainloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero, cfg.kd)
+    # client_fn, global_net, heterogeneous_nets = generate_client_fn(trainloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero, cfg.kd)
+    client_fn, heterogeneous_nets = generate_client_fn_kd(trainloaders, testloader, cfg.num_classes, cfg.checkpoint, cfg.r)
 
     ## step 3 define strategy
     #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
@@ -39,18 +40,34 @@ def main(cfg: DictConfig):
     #                                      )
     
     # r=8
-    params = get_parameters(Net)
+    # params = get_parameters(Net)
 
-    strategy = HeteroLoRA(Net, 
-                          fraction_fit=1.0,
-                          min_fit_clients=2,
-                          min_available_clients=2,
-                          evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader),
-                          initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
-                          r_values=cfg.r,
-                          hetero=cfg.hetero,
-                          hetero_net=heterogeneous_nets,
-                          padding_strategy=cfg.padding_strategy) 
+    # strategy = HeteroLoRA(Net, 
+    #                       fraction_fit=1.0,
+    #                       min_fit_clients=2,
+    #                       min_available_clients=2,
+    #                       evaluate_fn=get_evaluate_fn(cfg.num_classes, testloader),
+    #                       initial_parameters=fl.common.ndarrays_to_parameters(params), # set the initial parameter on the server side
+    #                       r_values=cfg.r,
+    #                       hetero=cfg.hetero,
+    #                       hetero_net=heterogeneous_nets,
+    #                       padding_strategy=cfg.padding_strategy) 
+
+    def fit_config(server_round):
+        config = {
+            "current_round": server_round
+        }
+        return config
+    
+    strategy = HeteroLoraKD(Net,
+                            fraction_fit=1.0,
+                            min_fit_clients=2,
+                            min_available_clients=2,
+                            # evaluate_fn=get_evaluate_fn(Net, cfg.num_classes, testloader),
+                            r_values=cfg.r,
+                            hetero_net=heterogeneous_nets,
+                            on_fit_config_fn = fit_config,
+                            )
 
     ## step 4: start simulation
     history = fl.simulation.start_simulation(

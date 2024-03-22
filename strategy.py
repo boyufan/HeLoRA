@@ -14,7 +14,7 @@ from torch.optim import AdamW
 
 from model import get_parameters
 from utilis import MutualEnsemble, KLDiv
-from dataset import load_public_data
+from dataset import load_public_data, load_public_data_test
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
@@ -180,7 +180,37 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             
         return padded_parameters
     
+    def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:
+        return super().evaluate(server_round, parameters)
 
+
+
+class HeteroLoraKD(fl.server.strategy.FedAvg):
+    def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, r_values, hetero_net, on_fit_config_fn):
+        super().__init__()
+        self.net = net
+        self.fraction_fit = fraction_fit
+        self.min_fit_clients = min_fit_clients
+        self.min_available_clients = min_available_clients
+        self.r_values = r_values
+        self.hetero_net = hetero_net
+        self.on_fit_config_fn = on_fit_config_fn
+
+
+    def aggregate_fit(self, server_round: int, results: List[Tuple[ClientProxy | FitRes]], failures: List[Tuple[ClientProxy, FitRes] | BaseException]) -> Tuple[Parameters | Dict[str, bool | bytes | float | int | str] | None]:
+        
+        print("start aggregating the parameters")
+        results = sorted(results, key=lambda x: int(x[0].cid))
+        parameters = [fit_res.parameters for _, fit_res in results]
+        # parameters_in_ndarrays = parameters_to_ndarrays(parameters)
+        parameters_in_ndarrays = [parameters_to_ndarrays(parameter) for parameter in parameters]
+        kd_parameters = self._kd_aggregate(parameters_in_ndarrays, self.hetero_net)
+        # 这里返回的是一组参数值，但正常流程返回的是聚合后的一个全局模型参数，这里该怎么办呢？
+        kd_parameters = ndarrays_to_parameters(kd_parameters)
+        # kd_parameters_in_ndarrays = [ndarrays_to_parameters(kd_parameter) for kd_parameter in kd_parameters]
+        return kd_parameters
+
+    
     def _kd_aggregate(self, parameters, hetero_nets):
         # step 1: get the lora outputs of all heterogeneous models (key: how to get the lora output from forward())
         # step 2: calculate the average lora output
@@ -203,7 +233,8 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
         # calculate the average logit
         ensemble_model = MutualEnsemble(current_net)
 
-        public_dataloader = load_public_data("imdb")
+        # public_dataloader = load_public_data("imdb")
+        public_dataloader = load_public_data_test()
 
         criterion = KLDiv(T=1)
 
@@ -217,12 +248,13 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
 
         for epoch in range(1):
             for batch in public_dataloader:
-                batch = {k: v.to(DEVICE) for k, v in batch.itmes()}
+                batch = {k: v.to(DEVICE) for k, v in batch.items()}
                 with torch.no_grad():
                     average_logit = ensemble_model(**batch)
                 
                 for index, model in enumerate(current_net):
                     model.zero_grad()
+                    batch = {k: v.to(DEVICE) for k, v in batch.items()}
                     logit = model(**batch).logits
                     loss_kd = criterion(logit, average_logit)
                     loss_kd.backward()
@@ -242,11 +274,6 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
 
     def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:
         return super().evaluate(server_round, parameters)
-
-
-
-
-    
 
         
         
