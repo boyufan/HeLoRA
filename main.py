@@ -12,6 +12,8 @@ from server import get_evaluate_fn, get_on_fit_config, weighted_average
 from model import Net, get_parameters
 from strategy import HeteroLoRA, HeteroLoraKD
 
+from utilis import fit_config
+
 import torch
 import time
 
@@ -53,11 +55,6 @@ def main(cfg: DictConfig):
     #                       hetero_net=heterogeneous_nets,
     #                       padding_strategy=cfg.padding_strategy) 
 
-    def fit_config(server_round):
-        config = {
-            "current_round": server_round
-        }
-        return config
     
     strategy = HeteroLoraKD(Net,
                             fraction_fit=1.0,

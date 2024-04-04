@@ -205,7 +205,7 @@ class HeteroLoraKD(fl.server.strategy.FedAvg):
         # parameters_in_ndarrays = parameters_to_ndarrays(parameters)
         parameters_in_ndarrays = [parameters_to_ndarrays(parameter) for parameter in parameters]
         kd_parameters = self._kd_aggregate(parameters_in_ndarrays, self.hetero_net)
-        # 这里返回的是一组参数值，但正常流程返回的是聚合后的一个全局模型参数，这里该怎么办呢？
+        
         kd_parameters = ndarrays_to_parameters(kd_parameters)
         # kd_parameters_in_ndarrays = [ndarrays_to_parameters(kd_parameter) for kd_parameter in kd_parameters]
         return kd_parameters
@@ -225,7 +225,9 @@ class HeteroLoraKD(fl.server.strategy.FedAvg):
             params_dict = zip(net.state_dict().keys(), parameter)
             state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
             net.load_state_dict(state_dict)
+            net.to(DEVICE)
             net.train()
+
             current_net.append(net)
         
         print(f"load finished, the number is {len(current_net)}") 

@@ -7,6 +7,8 @@ from sklearn import metrics
 import torch.nn.functional as F
 import copy
 
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
+
 class KLDiv(nn.Module):
     def __init__(self, T=1.0, reduction='batchmean'):
         """
@@ -33,12 +35,25 @@ class MutualEnsemble(torch.nn.Module):
     # x is batch
     def forward(self, **kwargs):
         # hard code here, to be improved
-        print(f"the input x looks like {kwargs}")
-        logits_total = torch.zeros(32, 8)
+        logits_total = None
         for i in range(len(self.models)):
             logit = self.models[i](**kwargs).logits
+            logit.to(DEVICE)
+
+            if logits_total is None:
+                logits_total = torch.zeros(logit.size(0), logit.size(1)).to(DEVICE)
+            if logit.size(0) != logits_total.size(0):
+                logits_total = logits_total[:logit.size(0)]
+
             logits_total += logit
         logits_e = logits_total / len(self.models)
 
         return logits_e
+
+
+def fit_config(server_round):
+        config = {
+            "current_round": server_round
+        }
+        return config
     

@@ -61,7 +61,6 @@ class FlowerClient(fl.client.NumPyClient):
         # self.model = Net(num_class)
         self.apply_kd = apply_kd
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # print(self.model)
         print(f"the current client is {self.cid}")
     
 
@@ -130,6 +129,8 @@ class FlowerClientKD(fl.client.NumPyClient):
     
 
     def set_parameters(self, parameters):
+        # choose the right model accorading to cid 
+
         index = int(self.cid) - 1
         parameter = parameters[index]
         params_dict = zip(self.model.state_dict().keys(), parameter)
@@ -145,15 +146,18 @@ class FlowerClientKD(fl.client.NumPyClient):
     def fit(self, parameters, config):
 
         # copy parameters sent by the server into client's local model
+
         # for the first round, should be the same with the defination
         print(f"the shape of parameters: {len(parameters)}")
-        print(f"the current server round is ")
-        print(config["current_round"])
         
         # 对于KD，在set_parameters这里要作单独的对应处理！
         # 现在的问题是只能从server段收到一个全局模型，没有办法收到多个模型参数，这个是现在的瓶颈
+
+        # if this is the first round, then directly conduct local training with the initial model, no extra setting
         if config["current_round"] != 1:
+            # if not the first round, then set the updated heterogeneous parameters from the server side
             self.set_parameters(parameters)
+            
         train(self.model, self.trainloader, epochs=1)
         print("local train finished!")
         return self.get_parameters({}), len(self.trainloader), {}
