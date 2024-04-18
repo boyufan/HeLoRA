@@ -36,7 +36,6 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
 
     def initialize_parameters(self, client_manager: ClientManager) -> Parameters | None:
         ndarrays = get_parameters(self.net)
-        # 返回序列化的模型参数（bytes）
         return fl.common.ndarrays_to_parameters(ndarrays)
 
 
@@ -57,7 +56,6 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
                 padded_parameters = self._linear_padding(parameters_in_ndarrays, self.r_values) 
             elif self.padding_strategy == "kd":
                 kd_parameters = self._kd_aggregate(parameters_in_ndarrays, self.hetero_net)
-                # 这里返回的是一组参数值，但正常流程返回的是聚合后的一个全局模型参数，这里该怎么办呢？
                 
                 # kd_parameters_in_ndarrays = [ndarrays_to_parameters(kd_parameter) for kd_parameter in kd_parameters]
                 # return kd_parameters_in_ndarrays, {}
@@ -212,14 +210,9 @@ class HeteroLoraKD(fl.server.strategy.FedAvg):
 
     
     def _kd_aggregate(self, parameters, hetero_nets):
-        # step 1: get the lora outputs of all heterogeneous models (key: how to get the lora output from forward())
-        # step 2: calculate the average lora output
-        # step 3: calculate the kl_div with each model
-        # step 4: update the heterogeneous models with kl loss
         current_net = []
         optimizers = []
 
-        # load the parameters
         for parameter, net in zip(parameters, hetero_nets):
 
             params_dict = zip(net.state_dict().keys(), parameter)

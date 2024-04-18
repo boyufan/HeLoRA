@@ -22,7 +22,6 @@ import time
 def main(cfg: DictConfig):
 
     ## step 1: load dataset
-    #TODO: Generalize the load_dataset function, make it can load different datasets and set different iid/non-iid settings
     # only evaluate at the server side
     trainloaders, testloader = load_federated_data(cfg.num_clients, cfg.checkpoint)
 
@@ -32,17 +31,6 @@ def main(cfg: DictConfig):
     # client_fn, global_net, heterogeneous_nets = generate_client_fn(trainloaders, cfg.num_classes, cfg.checkpoint, cfg.r, cfg.hetero, cfg.kd)
     client_fn, heterogeneous_nets = generate_client_fn_kd(trainloaders, testloader, cfg.num_classes, cfg.checkpoint, cfg.r)
 
-    ## step 3 define strategy
-    #TODO: custom a new strategy, especially the aggregation strategy, where can be extended from def aggregate_fit()
-    # strategy = fl.server.strategy.FedAvg(fraction_fit=1.0,
-    #                                      fraction_evaluate=0.5,
-    #                                      evaluate_fn=get_evaluate_fn(cfg.num_classes,
-    #                                                                  testloader),
-    #                                     #  evaluate_metrics_aggregation_fn=weighted_average,
-    #                                      )
-    
-    # r=8
-    # params = get_parameters(Net)
 
     # strategy = HeteroLoRA(Net, 
     #                       fraction_fit=1.0,
@@ -75,14 +63,6 @@ def main(cfg: DictConfig):
         client_resources={'num_cpus': 2, 'num_gpus': 1.0},
     )
 
-    ## step 6: save results
-    # save_path = HydraConfig.get().runtime.output_dir
-    # results_path = Path(save_path) / 'result.pkl'
-
-    # results = {'history': history, 'anythingelse': "here"}
-
-    # with open(str(results_path), 'wb') as h:
-    #     pickle.dump(results, h, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":
