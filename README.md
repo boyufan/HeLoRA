@@ -1,4 +1,4 @@
-# HeteroLoRA
+# HeLoRA
 
 ## Task 1: custom the load_dataset() function
 * can load different datasets in Huggingface Datasets
