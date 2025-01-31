@@ -19,7 +19,7 @@ from dataset import load_public_data, load_public_data_test
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
 
 
-class HeteroLoRA(fl.server.strategy.FedAvg):
+class HeLoRAPad(fl.server.strategy.FedAvg):
     def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, evaluate_fn, initial_parameters, r_values, hetero, hetero_net, padding_strategy="zero"):
         super().__init__()
         self.net = net
@@ -178,12 +178,49 @@ class HeteroLoRA(fl.server.strategy.FedAvg):
             
         return padded_parameters
     
+
+    def _adjacent_padding(self, parameters, r_values, max_r=8):
+        '''Perform adjacent padding for models with smaller r than the global one by copying the last row/column'''
+
+        padded_parameters = []
+
+        for parameter, r in zip(parameters, r_values):
+            params_dict = zip(self.net.state_dict().keys(), parameter)
+            state_dict = OrderedDict({k: torch.tensor(v, dtype=torch.float32) for k, v in params_dict})
+
+            adapted_state_dict = OrderedDict()
+
+            for key, tensor in state_dict.items():
+                if "lora_A.default.weight" in key or "lora_B.default.weight" in key:
+                    padding_size = max_r - r
+                    if padding_size > 0:
+                        if "lora_A.default.weight" in key:
+                            # Copy last row for lora_A
+                            last_row = tensor[-1:, :]  # Get last row
+                            padding = last_row.repeat(padding_size, 1)
+                            padded_tensor = torch.cat([tensor, padding], dim=0)
+                        elif "lora_B.default.weight" in key:
+                            # Copy last column for lora_B
+                            last_col = tensor[:, -1:]  # Get last column
+                            padding = last_col.repeat(1, padding_size)
+                            padded_tensor = torch.cat([tensor, padding], dim=1)
+                    else:
+                        padded_tensor = tensor
+                    adapted_state_dict[key] = padded_tensor
+                else:
+                    adapted_state_dict[key] = tensor
+                    
+            padded_parameter = [tensor.cpu().numpy() for tensor in adapted_state_dict.values()]
+            padded_parameters.append(padded_parameter)
+            
+        return padded_parameters
+    
     def evaluate(self, server_round: int, parameters: Parameters) -> Tuple[float, Dict[str, bool | bytes | float | int | str]] | None:
         return super().evaluate(server_round, parameters)
 
 
 
-class HeteroLoraKD(fl.server.strategy.FedAvg):
+class HeLoraKD(fl.server.strategy.FedAvg):
     def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, r_values, hetero_net, on_fit_config_fn):
         super().__init__()
         self.net = net
@@ -241,7 +278,7 @@ class HeteroLoraKD(fl.server.strategy.FedAvg):
         optimizers.append(optimizer_3)
 
 
-        for epoch in range(1):
+        for epoch in range(10):
             for batch in public_dataloader:
                 batch = {k: v.to(DEVICE) for k, v in batch.items()}
                 with torch.no_grad():

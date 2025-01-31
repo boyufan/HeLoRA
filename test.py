@@ -79,8 +79,6 @@ def main():
 
 
 
-
-
 class FlowerClientKD(fl.client.NumPyClient):
     def __init__(self, model, cid, trainloader, testloader) -> None:
         super().__init__()
