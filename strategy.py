@@ -220,7 +220,7 @@ class HeLoRAPad(fl.server.strategy.FedAvg):
 
 
 
-class HeLoraKD(fl.server.strategy.FedAvg):
+class HeLoRAKD(fl.server.strategy.FedAvg):
     def __init__(self, net, fraction_fit, min_fit_clients, min_available_clients, r_values, hetero_net, on_fit_config_fn):
         super().__init__()
         self.net = net

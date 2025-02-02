@@ -10,7 +10,7 @@ from dataset import load_federated_data
 from client import generate_client_fn, generate_client_fn_kd
 from server import get_evaluate_fn, get_on_fit_config, weighted_average
 from model import Net, get_parameters
-from strategy import HeLoRAPad, HeLoraKD
+from strategy import HeLoRAPad, HeLoRAKD
 
 from utilis import fit_config
 
@@ -44,7 +44,7 @@ def main(cfg: DictConfig):
     #                       padding_strategy=cfg.padding_strategy) 
 
     
-    strategy = HeLoraKD(Net,
+    strategy = HeLoRAKD(Net,
                             fraction_fit=1.0,
                             min_fit_clients=2,
                             min_available_clients=2,
