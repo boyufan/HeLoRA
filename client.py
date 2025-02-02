@@ -49,7 +49,7 @@ def test(net, testloader):
 
 
 class FlowerClient(fl.client.NumPyClient):
-    def __init__(self, cid, model, trainloader, r, num_class, hetero) -> None:
+    def __init__(self, cid, model, trainloader, r, num_class, hetero, apply_kd) -> None:
         super().__init__()
 
         self.model = model
@@ -59,8 +59,8 @@ class FlowerClient(fl.client.NumPyClient):
         self.hetero = hetero
         # self.valloader = valloader
         # self.model = Net(num_class)
+        self.apply_kd = apply_kd
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # print(self.model)
         print(f"the current client is {self.cid}")
     
 
@@ -69,7 +69,7 @@ class FlowerClient(fl.client.NumPyClient):
         params_dict = zip(self.model.state_dict().keys(), parameters)
         state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
         self.model.load_state_dict(state_dict, strict=True)
-
+    
 
     def get_parameters(self, config):
         
@@ -80,8 +80,13 @@ class FlowerClient(fl.client.NumPyClient):
 
         # copy parameters sent by the server into client's local model
         # here to add extra truncate
-        if self.hetero:
+        print(f"the shape of parameters: {len(parameters)}")
+        
+        if self.hetero and not self.apply_kd:
+            print(f"truncate the parameters")
             parameters = self._truncate_model(parameters, self.cid, self.r)
+        # 对于KD，在set_parameters这里要作单独的对应处理！
+        # 现在的问题是只能从server段收到一个全局模型，没有办法收到多个模型参数，这个是现在的瓶颈
         self.set_parameters(parameters)
         train(self.model, self.trainloader, epochs=1)
         print("local train finished!")
@@ -109,16 +114,64 @@ class FlowerClient(fl.client.NumPyClient):
         new_parameters = [v for k, v in adapted_state_dict.items()]
 
         return new_parameters
+    
+
+
+class FlowerClientKD(fl.client.NumPyClient):
+    def __init__(self, model, cid, trainloader, testloader) -> None:
+        super().__init__()
+        self.model = model
+        self.cid = cid
+        self.trainloader = trainloader
+        self.testloader = testloader
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"the current client is {self.cid}")
+    
+
+    def set_parameters(self, parameters):
+        # choose the right model accorading to cid 
+
+        index = int(self.cid) - 1
+        parameter = parameters[index]
+        params_dict = zip(self.model.state_dict().keys(), parameter)
+        state_dict = OrderedDict({k: torch.Tensor(v) for k, v in params_dict})
+        self.model.load_state_dict(state_dict, strict=True)
+    
+
+    def get_parameters(self, config):
+        
+        return [val.cpu().numpy() for _, val in self.model.state_dict().items()]
+    
+
+    def fit(self, parameters, config):
+
+        # copy parameters sent by the server into client's local model
+
+        # for the first round, should be the same with the defination
+        print(f"the shape of parameters: {len(parameters)}")
+        
+        # 对于KD，在set_parameters这里要作单独的对应处理！
+        # 现在的问题是只能从server段收到一个全局模型，没有办法收到多个模型参数，这个是现在的瓶颈
+
+        # if this is the first round, then directly conduct local training with the initial model, no extra setting
+        if config["current_round"] != 1:
+            # if not the first round, then set the updated heterogeneous parameters from the server side
+            self.set_parameters(parameters)
+            
+        train(self.model, self.trainloader, epochs=1)
+        print("local train finished!")
+        return self.get_parameters({}), len(self.trainloader), {}
 
     
 
-    # def evaluate(self, parameters, config):
-
-    #     self.set_parameters(parameters)
-    #     # loss, accuracy = test(self.model, self.valloader, self.device)
-    #     loss, accuracy = test(self.model, self.valloader)
-    #     # print(f'loss: {loss}, accuracy: {accuracy}')
-    #     return float(loss), len(self.valloader), {'accuracy': accuracy}
+    def evaluate(self, parameters, config):
+        index = int(self.cid) - 1
+        parameter = parameters[index]
+        self.set_parameters(parameter)
+        # loss, accuracy = test(self.model, self.valloader, self.device)
+        loss, accuracy = test(self.model, self.valloader)
+        # print(f'loss: {loss}, accuracy: {accuracy}')
+        return float(loss), len(self.valloader), {'accuracy': accuracy}
     
 
 class HuaggingFaceClient(fl.client.NumPyClient):
@@ -158,7 +211,7 @@ class HuaggingFaceClient(fl.client.NumPyClient):
         return 0.0, len(self.train_dataset), {"accuracy": 0.0}
 
 
-def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = False):
+def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = False, apply_kd: bool = False):
 
     net = AutoModelForSequenceClassification.from_pretrained(
         CHECKPOINT, 
@@ -167,11 +220,13 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
 
     if not hetero:
         print("homogeneous setting")
-        lora_net = build_lora_model(net)
+        # lora_net = build_lora_model(net)
 
     else:
         print("heterogeneous setting")
-        lora_nets = build_hetero_lora_models(net, r)
+        # lora_nets = build_hetero_lora_models(net, r)
+    lora_net = build_lora_model(net)
+    lora_nets = build_hetero_lora_models(net, r)
 
     def client_fn(cid: str):
         if not hetero:
@@ -180,15 +235,38 @@ def generate_client_fn(trainloaders, num_classes, CHECKPOINT, r, hetero: bool = 
                                 trainloader=trainloaders[int(cid)],
                                 r=r,
                                 num_class=num_classes,
-                                hetero=hetero).to_client()
+                                hetero=hetero,
+                                apply_kd=apply_kd).to_client()
         else:
             return FlowerClient(model=lora_nets[int(cid)],
                                 cid=cid,
                                 trainloader=trainloaders[int(cid)],
                                 r=r[int(cid)],
                                 num_class=num_classes,
-                                hetero=hetero).to_client()
-    return client_fn
+                                hetero=hetero,
+                                apply_kd=apply_kd).to_client()
+    return client_fn, lora_net, lora_nets
+
+
+
+def generate_client_fn_kd(trainloaders, testloader, num_classes, CHECKPOINT, r):
+
+    net = AutoModelForSequenceClassification.from_pretrained(
+        CHECKPOINT, 
+        num_labels=num_classes
+    )
+
+    lora_nets = build_hetero_lora_models(net, r)
+
+    def client_fn(cid: str):
+
+        return FlowerClientKD(model=lora_nets[int(cid)],
+                              cid=cid,
+                              trainloader=trainloaders[int(cid)],
+                              testloader=testloader,
+                              )
+
+    return client_fn, lora_nets
 
 
 def main():

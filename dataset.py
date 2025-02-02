@@ -10,6 +10,8 @@ from transformers import AutoTokenizer, DataCollatorWithPadding
 
 from flwr_datasets import FederatedDataset
 
+CHECKPOINT = "distilbert-base-uncased" 
+
 def load_federated_data_withval(num_clients, CHECKPOINT):
     """Load data (train, validate and test)"""
     fds = FederatedDataset(dataset="imdb", partitioners={"train": num_clients})
@@ -97,7 +99,47 @@ def load_federated_data(num_clients, CHECKPOINT):
 
     return trainloaders, testloader
 
+def load_public_data(dataset_name):
 
+    dataset = load_dataset(dataset_name)
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+
+    def preprocess_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True, max_length=128)
+    
+    tokenized_dataset = dataset.map(preprocess_function, batched=True)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    train_dataloader = DataLoader(tokenized_dataset['train'], shuffle=True, batch_size=32, collate_fn=data_collator)
+
+    return train_dataloader
+
+
+def load_public_data_test():
+    """Load data (train and test)"""
+    fds = FederatedDataset(dataset="imdb", partitioners={"train": 1})
+
+    tokenizer = AutoTokenizer.from_pretrained(CHECKPOINT)
+
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], truncation=True)
+
+    # assign dataloaders to clients
+    partition = fds.load_partition(0)
+    partition = partition.map(tokenize_function, batched=True)
+    partition = partition.remove_columns("text")
+    partition = partition.rename_column("label", "labels")
+
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
+    trainloader = DataLoader(
+        partition,
+        shuffle=True,
+        batch_size=32,
+        collate_fn=data_collator,
+    )
+
+    return trainloader
 
 
 def get_mnist(data_path='./data'):
